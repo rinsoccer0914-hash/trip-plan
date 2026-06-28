@@ -62,11 +62,11 @@
     {% for day in days_data %}
     <div class="day-block">
       <div class="day-label">📅 {{ day }}日目</div>
-      <div class="drop-zone" id="zone-{{ day }}"
+      <div class="drop-zone" id="zone-{{ day.number }}"
            ondragover="event.preventDefault()"
            ondragenter="this.classList.add('drag-over')"
            ondragleave="this.classList.remove('drag-over')"
-           ondrop="onDrop(event, {{ day }})">
+           ondrop="onDrop(event, {{ day.number }})">
         {% for item in day.items %}
         <div class="s-card" draggable="true" data-item="{{ item.pk }}" data-day="{{ day }}"
              ondragstart="itemDragStart(event)">
