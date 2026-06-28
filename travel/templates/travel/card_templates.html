@@ -1,0 +1,57 @@
+{% extends 'travel/base.html' %}
+{% block title %}予定カード管理 - TravelPlan{% endblock %}
+{% block content %}
+<div class="container" style="max-width:720px">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
+    <a href="/" style="font-size:13px;color:#666">← マイプランに戻る</a>
+    <h1 style="font-size:22px;font-weight:600;flex:1">予定カード管理</h1>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <h2 style="font-size:15px;font-weight:600;margin-bottom:16px">新しいカードを作成</h2>
+    <form method="post" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      {% csrf_token %}
+      <div class="form-group" style="flex:1;min-width:180px;margin-bottom:0">
+        <label>カード名</label>
+        <input type="text" name="name" placeholder="例：東京タワー観光" required>
+      </div>
+      <div class="form-group" style="min-width:120px;margin-bottom:0">
+        <label>種類</label>
+        <select name="card_type">
+          <option value="move">移動</option>
+          <option value="eat">食事</option>
+          <option value="see">観光</option>
+          <option value="stay">宿泊</option>
+          <option value="free">フリー</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">追加</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:15px;font-weight:600;margin-bottom:16px">カード一覧</h2>
+    {% if templates %}
+    <div style="display:flex;flex-direction:column;gap:8px">
+      {% for tpl in templates %}
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #e5e5e0;border-radius:8px;background:#fafaf8">
+        <span class="dot dot-{{ tpl.card_type }}"></span>
+        <span style="flex:1;font-size:14px;font-weight:500">{{ tpl.name }}</span>
+        <span class="badge badge-{{ tpl.card_type }}">{{ tpl.get_card_type_display }}</span>
+        {% if not tpl.is_default %}
+        <form method="post" action="/cards/{{ tpl.pk }}/delete/" style="margin:0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('削除しますか？')">削除</button>
+        </form>
+        {% else %}
+        <span style="font-size:11px;color:#aaa;min-width:48px;text-align:right">デフォルト</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:40px;color:#aaa">カードがありません</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

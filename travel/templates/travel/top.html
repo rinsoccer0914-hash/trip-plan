@@ -1,0 +1,43 @@
+{% extends 'travel/base.html' %}
+{% block title %}マイプラン - TravelPlan{% endblock %}
+{% block content %}
+<div class="container">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+    <h1 style="font-size:22px;font-weight:600">マイプラン</h1>
+    <a href="/plan/new/" class="btn btn-primary">＋ 新しいプラン</a>
+  </div>
+
+  {% if plans %}
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
+    {% for plan in plans %}
+    <div class="card" style="padding:20px;transition:border-color .15s;cursor:pointer" onclick="location.href='/plan/{{ plan.pk }}/edit/'">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:16px;font-weight:600">{{ plan.name }}</div>
+        <span class="badge" style="background:#dbeafe;color:#1d4ed8;white-space:nowrap">{{ plan.day_count }}日間</span>
+      </div>
+      {% if plan.start_date %}
+      <div style="font-size:13px;color:#666;margin-bottom:6px">📅 {{ plan.start_date }} 〜 {{ plan.end_date }}</div>
+      {% else %}
+      <div style="font-size:13px;color:#aaa;margin-bottom:6px">📅 日程未設定</div>
+      {% endif %}
+      <div style="font-size:13px;color:#666;margin-bottom:14px">📋 予定 {{ plan.total_cards }}件</div>
+      <div style="display:flex;gap:8px">
+        <a href="/plan/{{ plan.pk }}/edit/" class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">編集</a>
+        <form method="post" action="/plan/{{ plan.pk }}/delete/" onclick="event.stopPropagation()" style="margin:0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('このプランを削除しますか？')">削除</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:80px 20px;color:#aaa">
+    <div style="font-size:48px;margin-bottom:16px">🗺</div>
+    <div style="font-size:16px;margin-bottom:8px">まだプランがありません</div>
+    <div style="font-size:13px;margin-bottom:20px">「新しいプラン」からプランを作成しましょう</div>
+    <a href="/plan/new/" class="btn btn-primary">＋ 新しいプラン</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

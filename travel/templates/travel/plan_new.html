@@ -1,0 +1,31 @@
+{% extends 'travel/base.html' %}
+{% block title %}新しいプラン - TravelPlan{% endblock %}
+{% block content %}
+<div class="container" style="max-width:520px">
+  <a href="/" style="font-size:13px;color:#666;display:inline-flex;align-items:center;gap:4px;margin-bottom:20px">← マイプランに戻る</a>
+  <div class="card">
+    <h1 style="font-size:18px;font-weight:600;margin-bottom:24px">新しいプランを作成</h1>
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-group">
+        <label>プラン名 *</label>
+        <input type="text" name="name" placeholder="例：夏の京都旅行" required autofocus>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>出発日</label>
+          <input type="date" name="start_date">
+        </div>
+        <div class="form-group">
+          <label>帰着日</label>
+          <input type="date" name="end_date">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <a href="/" class="btn btn-secondary">キャンセル</a>
+        <button type="submit" class="btn btn-primary">作成してスケジュール編集へ →</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

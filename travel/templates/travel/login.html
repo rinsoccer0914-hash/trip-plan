@@ -1,0 +1,31 @@
+{% extends 'travel/base.html' %}
+{% block title %}ログイン - TravelPlan{% endblock %}
+{% block content %}
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 16px">
+  <div style="width:100%;max-width:380px">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:28px;font-weight:700;color:#1a1a1a">✈ <span style="color:#2563eb">Travel</span>Plan</div>
+      <div style="font-size:14px;color:#666;margin-top:6px">旅行プランを作成・管理する</div>
+    </div>
+    <div class="card">
+      <h2 style="font-size:18px;font-weight:600;margin-bottom:20px">ログイン</h2>
+      {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+      <form method="post">
+        {% csrf_token %}
+        <div class="form-group">
+          <label>ユーザー名</label>
+          <input type="text" name="username" placeholder="username" autofocus required>
+        </div>
+        <div class="form-group">
+          <label>パスワード</label>
+          <input type="password" name="password" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">ログイン</button>
+      </form>
+      <p style="text-align:center;margin-top:16px;font-size:13px;color:#666">
+        アカウントをお持ちでない方は <a href="/register/">新規登録</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
