@@ -1,12 +1,130 @@
 {% extends 'travel/base.html' %}
 {% block title %}ログイン - TravelPlan{% endblock %}
+{% block extra_css %}
+<style>
+.hero{background:linear-gradient(135deg,#0ea5e9 0%,#2563eb 55%,#059669 100%);color:#fff;padding:96px 24px 80px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 20% 20%,rgba(255,255,255,.15),transparent 45%),radial-gradient(circle at 80% 70%,rgba(255,255,255,.12),transparent 40%)}
+.hero-inner{position:relative;max-width:720px;margin:0 auto}
+.hero-logo{font-size:20px;font-weight:700;letter-spacing:.02em;opacity:.9;margin-bottom:20px}
+.hero-title{font-size:clamp(28px,5vw,44px);font-weight:700;line-height:1.35;margin-bottom:16px}
+.hero-sub{font-size:15px;color:rgba(255,255,255,.9);margin-bottom:32px;line-height:1.7}
+.hero-cta{display:inline-flex;gap:12px}
+
+.section{padding:64px 24px}
+.section-inner{max-width:960px;margin:0 auto}
+.section-head{text-align:center;margin-bottom:40px}
+.section-head h2{font-size:24px;font-weight:700;color:#1a1a1a;margin-bottom:8px}
+.section-head p{font-size:14px;color:#777}
+
+.demo-section{background:#fff}
+.demo-plan-name{font-size:13px;color:#888;text-align:center;margin-bottom:24px}
+.demo-plan-name strong{color:#1a1a1a}
+.demo-timeline{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.demo-card{display:flex;align-items:center;gap:14px;background:#fafaf8;border:1px solid #eee;border-left:5px solid #9ca3af;border-radius:10px;padding:12px 16px}
+.demo-card.type-wake{border-left-color:#fbbf24}
+.demo-card.type-move{border-left-color:#3b82f6}
+.demo-card.type-eat{border-left-color:#f59e0b}
+.demo-card.type-see{border-left-color:#10b981}
+.demo-card.type-stay{border-left-color:#8b5cf6}
+.demo-card.type-free{border-left-color:#9ca3af}
+.demo-card-time{font-size:13px;font-weight:700;color:#1a1a1a;white-space:nowrap;width:96px;flex-shrink:0}
+.demo-card-time span{color:#bbb;font-weight:400;margin:0 2px}
+.demo-card-body{flex:1;min-width:0}
+.demo-card-name{font-size:14px;font-weight:600;color:#1a1a1a}
+.demo-card-memo{font-size:12px;color:#888;margin-top:2px}
+
+.features-section{background:#f5f5f0}
+.feature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.feature-card{background:#fff;border:1px solid #e5e5e0;border-radius:14px;padding:24px}
+.feature-icon{width:44px;height:44px;border-radius:12px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:14px}
+.feature-card h3{font-size:15px;font-weight:600;color:#1a1a1a;margin-bottom:6px}
+.feature-card p{font-size:13px;color:#666;line-height:1.6}
+
+.login-section{background:#fff;padding:72px 24px 96px}
+.login-card{width:100%;max-width:380px;margin:0 auto}
+
+@media (max-width:640px){
+  .feature-grid{grid-template-columns:1fr}
+  .demo-card{flex-wrap:wrap}
+  .demo-card-time{width:auto}
+}
+</style>
+{% endblock %}
 {% block content %}
-<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 16px">
-  <div style="width:100%;max-width:380px">
-    <div style="text-align:center;margin-bottom:28px">
-      <div style="font-size:28px;font-weight:700;color:#1a1a1a">✈ <span style="color:#2563eb">Travel</span>Plan</div>
-      <div style="font-size:14px;color:#666;margin-top:6px">旅行プランを作成・管理する</div>
+<div class="hero">
+  <div class="hero-inner">
+    <div class="hero-logo">✈ TravelPlan</div>
+    <div class="hero-title">旅行プランの見える化</div>
+    <div class="hero-sub">行き先・時間・持ち物を、時間軸のタイムラインでひと目でわかる形に。<br>予定カードを置くだけで、旅のしおりができあがります。</div>
+    <div class="hero-cta">
+      <a href="#login" class="btn btn-primary">ログインして始める</a>
+      <a href="#demo" class="btn btn-secondary">デモを見る</a>
     </div>
+  </div>
+</div>
+
+<div class="section demo-section" id="demo">
+  <div class="section-inner">
+    <div class="section-head">
+      <h2>こんな風に見える化されます</h2>
+      <p>実際にアプリで作成した1日分のスケジュール例です</p>
+    </div>
+    <div class="demo-plan-name">📅 サンプルプラン：<strong>{{ demo_plan_name|default:"京都1日観光" }}</strong></div>
+    <div class="demo-timeline">
+      {% for item in demo_items %}
+      <div class="demo-card type-{{ item.card_type }}">
+        <div class="demo-card-time">{{ item.start_time_str }}<span>→</span>{{ item.end_time_str }}</div>
+        <div class="demo-card-body">
+          <div class="demo-card-name">
+            <span class="dot dot-{{ item.card_type }}"></span>
+            {{ item.name }}
+          </div>
+          {% if item.memo %}<div class="demo-card-memo">{{ item.memo }}</div>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="section features-section">
+  <div class="section-inner">
+    <div class="section-head">
+      <h2>TravelPlanでできること</h2>
+      <p>旅の予定を組み立てるための機能</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🗺</div>
+        <h3>複数日の旅行プランを管理</h3>
+        <p>出発日・帰着日を決めて旅行プランを作成し、日ごとにスケジュールを管理できます。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⏰</div>
+        <h3>15分刻みの時間軸タイムライン</h3>
+        <p>1日のスケジュールを時間軸の表として表示。予定が重なった場合は自動で並べて表示します。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🖱</div>
+        <h3>カードをドラッグ&ドロップ / クリックで追加</h3>
+        <p>起床・移動（車/電車/バス/飛行機/徒歩/自転車）・食事・観光・宿泊・フリーなど種類別の予定カードをタイムラインに配置するだけ。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📝</div>
+        <h3>メモとアラーム</h3>
+        <p>予定ごとにメモを残せるほか、起床カードには目覚まし用のカレンダー連携も設定できます。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔗</div>
+        <h3>作った予定を一緒に行く人へ共有</h3>
+        <p>プランごとに共有リンクを発行できます。リンクを知っている人はログインなしで予定表を閲覧でき、一緒に行く人と旅程をすぐに共有できます。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="login-section" id="login">
+  <div class="login-card">
     <div class="card">
       <h2 style="font-size:18px;font-weight:600;margin-bottom:20px">ログイン</h2>
       {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}

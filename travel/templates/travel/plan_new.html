@@ -1,10 +1,10 @@
 {% extends 'travel/base.html' %}
-{% block title %}新しいプラン - TravelPlan{% endblock %}
+{% block title %}新しい旅行プラン - TravelPlan{% endblock %}
 {% block content %}
 <div class="container" style="max-width:520px">
   <a href="/" style="font-size:13px;color:#666;display:inline-flex;align-items:center;gap:4px;margin-bottom:20px">← マイプランに戻る</a>
   <div class="card">
-    <h1 style="font-size:18px;font-weight:600;margin-bottom:24px">新しいプランを作成</h1>
+    <h1 style="font-size:18px;font-weight:600;margin-bottom:24px">新しい旅行プランを作成</h1>
     <form method="post">
       {% csrf_token %}
       <div class="form-group">
@@ -14,11 +14,11 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group">
           <label>出発日</label>
-          <input type="date" name="start_date">
+          <input type="date" name="start_date" id="start-date" onchange="onStartDateChange()">
         </div>
         <div class="form-group">
           <label>帰着日</label>
-          <input type="date" name="end_date">
+          <input type="date" name="end_date" id="end-date">
         </div>
       </div>
       <div style="display:flex;gap:10px;margin-top:8px">
@@ -28,4 +28,16 @@
     </form>
   </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function onStartDateChange() {
+  const startDate = document.getElementById('start-date');
+  const endDate = document.getElementById('end-date');
+  endDate.min = startDate.value;
+  if (startDate.value && endDate.value && endDate.value < startDate.value) {
+    endDate.value = startDate.value;
+  }
+}
+</script>
 {% endblock %}

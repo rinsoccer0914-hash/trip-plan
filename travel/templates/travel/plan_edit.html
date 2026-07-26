@@ -5,6 +5,8 @@
 .editor-wrap{display:flex;height:calc(100vh - 56px)}
 .palette{width:220px;background:#fff;border-right:1px solid #e5e5e0;display:flex;flex-direction:column;overflow:hidden}
 .palette-head{padding:16px;border-bottom:1px solid #e5e5e0;display:flex;align-items:center;justify-content:space-between}
+.palette-filter{padding:10px 16px;border-bottom:1px solid #e5e5e0;background:#fafaf8}
+.palette-filter select{width:100%;font-size:13px;padding:6px 8px;border:1px solid #d0d0cc;border-radius:6px;background:#fff;color:#1a1a1a;cursor:pointer}
 .palette-head h3{font-size:13px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em}
 .palette-list{flex:1;overflow-y:auto;padding:12px}
 .p-card{background:#fff;border:1px solid #e0e0db;border-radius:8px;padding:10px 12px;cursor:grab;margin-bottom:8px;font-size:13px;display:flex;align-items:center;gap:8px;user-select:none;transition:border-color .1s}
@@ -14,27 +16,99 @@
 .timeline-wrap{flex:1;overflow-y:auto;padding:20px;background:#f5f5f0}
 .plan-bar{background:#fff;border-bottom:1px solid #e5e5e0;padding:12px 20px;display:flex;align-items:center;gap:12px}
 .plan-bar input{flex:1;border:none;font-size:16px;font-weight:600;color:#1a1a1a;outline:none;background:none}
-.day-block{margin-bottom:20px}
-.day-label{font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding:0 4px}
-.drop-zone{min-height:80px;border:2px dashed #d0d0cc;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;transition:all .15s;background:#fff}
-.drop-zone.drag-over{border-color:#2563eb;background:#eff6ff}
-.s-card{background:#fff;border:1px solid #e0e0db;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:13px;cursor:grab;transition:border-color .1s}
-.s-card:hover{border-color:#c0c0f0}
-.s-card:active{opacity:.6;cursor:grabbing}
-.s-card-info{flex:1}
-.s-card-type{font-size:11px;color:#999;margin-bottom:2px}
-.s-card-name{font-weight:500;color:#1a1a1a}
-.s-card-del{margin-left:auto;background:none;border:none;cursor:pointer;color:#ccc;font-size:16px;padding:2px 4px;border-radius:4px;line-height:1}
-.s-card-del:hover{color:#dc2626;background:#fef2f2}
-.drop-hint{text-align:center;font-size:13px;color:#bbb;padding:20px;width:100%}
+.day-switcher{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:0 4px;position:sticky;top:0;z-index:5}
+.day-switcher-label{font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em}
+.day-switcher select{font-size:14px;font-weight:600;padding:6px 10px;border:1px solid #d0d0cc;border-radius:8px;background:#fff;color:#1a1a1a;cursor:pointer}
+.day-block{display:none;margin-bottom:28px}
+.day-block.active{display:block}
 .top-bar{background:#fff;border-bottom:1px solid #e5e5e0;padding:10px 20px;display:flex;align-items:center;gap:12px}
+
+.timeline-outer{display:flex;border:1px solid #e5e5e0;border-radius:10px;background:#fff;max-height:calc(100vh - 220px);min-height:280px;overflow-y:auto}
+.ruler{width:52px;flex-shrink:0;position:relative;border-right:1px solid #eee;background:#fafaf8}
+.ruler-hour{position:absolute;left:0;right:0;font-size:10px;color:#999;padding:2px 4px;box-sizing:border-box}
+.timeline{flex:1;position:relative;
+  background-image:
+    repeating-linear-gradient(to bottom, #ddd 0, #ddd 1px, transparent 1px, transparent {{ hour_height }}px),
+    repeating-linear-gradient(to bottom, #f0f0ec 0, #f0f0ec 1px, transparent 1px, transparent {{ slot_height }}px);
+}
+.timeline.drag-over{background-color:#eff6ff}
+.timeline-empty-hint{position:absolute;top:0;left:0;right:0;text-align:center;font-size:12px;color:#bbb;padding:14px 8px}
+.t-card{position:absolute;background:#fff;border:1px solid #e0e0db;border-left:4px solid #9ca3af;border-radius:6px;padding:4px 26px 4px 8px;font-size:12px;display:flex;align-items:flex-start;gap:10px;overflow:hidden;cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.05);box-sizing:border-box}
+.t-card:hover{border-color:#c0c0f0}
+.t-card.type-wake{border-left-color:#fbbf24}
+.t-card.type-move{border-left-color:#3b82f6}
+.t-card.type-eat{border-left-color:#f59e0b}
+.t-card.type-see{border-left-color:#10b981}
+.t-card.type-stay{border-left-color:#8b5cf6}
+.t-card.type-free{border-left-color:#9ca3af}
+.t-card-time{display:flex;flex-direction:column;align-items:center;flex-shrink:0;line-height:1.1}
+.time-pick{display:flex;align-items:center;gap:1px}
+.time-pick select{border:none;background:transparent;font-size:13px;font-weight:600;padding:0;color:#1a1a1a;text-align:center;text-align-last:center;cursor:pointer}
+.time-pick .t-hour{width:32px}
+.time-pick .t-min{width:34px}
+.time-pick .t-colon{color:#999;font-size:12px}
+.t-card-time .t-arrow{font-size:11px;color:#aaa;line-height:1.4}
+.t-card-main{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.t-card .t-name{font-size:14px;font-weight:600;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-card .t-del{position:absolute;top:3px;right:3px;background:none;border:none;color:#bbb;cursor:pointer;font-size:17px;line-height:1;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.t-card .t-del:hover{color:#dc2626;background:#fef2f2}
+.t-memo-text{font-size:12px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:1px}
+.t-day-move{font-size:10px;color:#999;border:1px solid #e5e5e0;border-radius:4px;padding:1px 3px;background:#fafaf8;cursor:pointer;flex-shrink:0}
+.t-alarm-row{display:flex;align-items:center;gap:6px;font-size:11px;color:#92400e}
+.t-alarm-row label{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.t-alarm-row input[type="checkbox"]{cursor:pointer}
+.t-alarm-row a{color:#2563eb;white-space:nowrap}
+.t-approval-row{display:flex;align-items:center;gap:8px;font-size:11px;color:#065f46;flex-wrap:wrap}
+.t-approval-row label{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.t-approval-row input[type="checkbox"]{cursor:pointer}
+.approval-buttons{display:flex;align-items:center;gap:4px}
+.approve-btn,.reject-btn{border:1px solid #e0e0db;background:#fff;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;padding:3px 10px;line-height:1.4}
+.approve-btn:hover{border-color:#10b981;color:#10b981}
+.reject-btn:hover{border-color:#dc2626;color:#dc2626}
+.approve-btn.active{background:#d1fae5;border-color:#10b981;color:#065f46}
+.reject-btn.active{background:#fee2e2;border-color:#dc2626;color:#991b1b}
+.approval-tally{color:#666;white-space:nowrap}
+.reject-comments{display:flex;flex-direction:column;gap:2px;margin-top:2px}
+.reject-comment{font-size:11px;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:4px 8px;white-space:normal;word-break:break-word}
+
+.modal-alarm-row{display:none;align-items:center;gap:8px;font-size:13px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;margin-bottom:16px}
+.modal-alarm-row.show{display:flex}
+.modal-alarm-row label{display:flex;align-items:center;gap:6px;cursor:pointer}
+
+.modal-time-pick{display:flex;align-items:center;gap:6px}
+.modal-time-pick select{width:auto;flex:1;padding:9px 6px;text-align:center}
+.modal-time-pick span{color:#999;font-weight:600}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);align-items:center;justify-content:center;z-index:200}
+.modal-overlay.open{display:flex}
+.modal-box{background:#fff;border-radius:12px;padding:24px;width:340px;max-width:90vw;box-shadow:0 10px 30px rgba(0,0,0,.15)}
+.modal-box h3{font-size:15px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.modal-box textarea{resize:vertical}
 </style>
 {% endblock %}
 {% block content %}
 <div class="top-bar">
   <a href="/" class="btn btn-secondary btn-sm">← 戻る</a>
-  <input id="plan-name" type="text" value="{{ plan.name }}" style="flex:1;border:none;font-size:16px;font-weight:600;outline:none;background:none;color:#1a1a1a">
-  {% if plan.start_date %}<span style="font-size:13px;color:#888">{{ plan.start_date }} 〜 {{ plan.end_date }}</span>{% endif %}
+  <input id="plan-name" type="text" value="{{ plan.name }}" {% if not is_owner %}readonly{% endif %} style="flex:1;border:none;font-size:16px;font-weight:600;outline:none;background:none;color:#1a1a1a">
+  {% if plan.start_date %}<span style="font-size:13px;color:#888">{{ plan.start_date|date:"Y/m/d" }} 〜 {{ plan.end_date|date:"Y/m/d" }}</span>{% endif %}
+  {% if is_owner %}
+  <form method="post" action="/plan/{{ plan.pk }}/set-group/" style="margin:0">
+    {% csrf_token %}
+    <select name="group_id" onchange="this.form.submit()" style="font-size:13px;padding:5px 8px;border:1px solid #d0d0cc;border-radius:6px;background:#fff;color:#1a1a1a;cursor:pointer">
+      <option value="">👤 個人のプラン</option>
+      {% for g in my_groups %}<option value="{{ g.pk }}" {% if plan.group_id == g.pk %}selected{% endif %}>👥 {{ g.name }}</option>{% endfor %}
+    </select>
+  </form>
+  {% elif plan.group %}
+  <span style="font-size:13px;color:#888">👥 {{ plan.group.name }}</span>
+  {% endif %}
+  {% if is_owner %}
+  <form method="post" action="/plan/{{ plan.pk }}/like/" style="margin:0">
+    {% csrf_token %}
+    <button type="submit" title="{% if plan.is_liked %}いいねを取り消す{% else %}いいね{% endif %}" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1;padding:4px">{% if plan.is_liked %}❤️{% else %}🤍{% endif %}</button>
+  </form>
+  {% endif %}
+  <button class="btn btn-secondary btn-sm" onclick="openShareModal()">🔗 共有</button>
   <button class="btn btn-primary btn-sm" onclick="savePlan()">保存して戻る</button>
 </div>
 <div class="editor-wrap">
@@ -44,42 +118,130 @@
       <h3>予定カード</h3>
       <a href="/cards/" class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 8px">管理</a>
     </div>
+    <div class="palette-filter">
+      <select id="type-filter" onchange="filterPalette(this.value)">
+        <option value="all">すべての種類</option>
+        <option value="wake">起床</option>
+        <option value="move">移動</option>
+        <option value="eat">食事</option>
+        <option value="see">観光</option>
+        <option value="stay">宿泊</option>
+        <option value="free">フリー</option>
+      </select>
+    </div>
     <div class="palette-list" id="palette-list">
       {% for tpl in templates %}
       <div class="p-card" draggable="true" data-tpl="{{ tpl.pk }}" data-name="{{ tpl.name }}" data-type="{{ tpl.card_type }}"
-           ondragstart="palDragStart(event)">
+           ondragstart="palDragStart(event)" onclick="openAddModal(this)">
         <span class="dot dot-{{ tpl.card_type }}"></span>
         <span class="p-card-name">{{ tpl.name }}</span>
       </div>
       {% empty %}
       <div style="text-align:center;font-size:13px;color:#bbb;padding:20px">カードがありません。<br><a href="/cards/">カードを追加</a></div>
       {% endfor %}
+      <div id="palette-empty-hint" style="display:none;text-align:center;font-size:13px;color:#bbb;padding:20px">この種類のカードはありません</div>
     </div>
   </div>
 
   <!-- Timeline -->
-  <div class="timeline-wrap">
+  <div class="timeline-wrap" id="timeline-wrap">
+    <div class="day-switcher">
+      <span class="day-switcher-label">📅 表示する日</span>
+      <select id="day-select" onchange="switchDay(this.value)">
+        {% for day in days_data %}<option value="{{ day.number }}">{{ day.number }}日目</option>{% endfor %}
+      </select>
+    </div>
     {% for day in days_data %}
-    <div class="day-block">
-      <div class="day-label">📅 {{ day }}日目</div>
-      <div class="drop-zone" id="zone-{{ day.number }}"
-           ondragover="event.preventDefault()"
-           ondragenter="this.classList.add('drag-over')"
-           ondragleave="this.classList.remove('drag-over')"
-           ondrop="onDrop(event, {{ day.number }})">
-        {% for item in day.items %}
-        <div class="s-card" draggable="true" data-item="{{ item.pk }}" data-day="{{ day }}"
-             ondragstart="itemDragStart(event)">
-          <span class="dot dot-{{ item.card_type }}"></span>
-          <div class="s-card-info">
-            <div class="s-card-type">{{ item.get_card_type_display }}</div>
-            <div class="s-card-name">{{ item.name }}</div>
-          </div>
-          <button class="s-card-del" onclick="removeItem({{ item.pk }}, this)" title="削除">×</button>
+    <div class="day-block" data-day="{{ day.number }}">
+      <div class="timeline-outer" id="outer-{{ day.number }}">
+        <div class="ruler" style="height:{{ day_height }}px">
+          {% for mark in hour_marks %}
+          <div class="ruler-hour" style="top:{{ mark.top }}px">{{ mark.label }}</div>
+          {% endfor %}
         </div>
-        {% empty %}
-        <div class="drop-hint" id="hint-{{ day }}">ここにカードをドロップ</div>
-        {% endfor %}
+        <div class="timeline" id="timeline-{{ day.number }}" style="height:{{ day_height }}px"
+             ondragover="event.preventDefault()"
+             ondragenter="this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="onTimelineDrop(event, {{ day.number }})">
+          {% for item in day.items %}
+          <div class="t-card type-{{ item.card_type }}" draggable="true" data-item="{{ item.pk }}" data-day="{{ day.number }}"
+               style="top:{{ item.top_px }}px;height:{{ item.height_px }}px;left:calc({{ item.left_pct }}% + 4px);width:calc({{ item.width_pct }}% - 8px)"
+               ondragstart="itemDragStart(event)">
+            <div class="t-card-time">
+              <div class="time-pick t-start">
+                <select class="t-hour" onchange="updateCardTime({{ item.pk }}, this)">
+                  {% for h in hour_options %}<option value="{{ h }}" {% if h == item.start_time_str|slice:":2" %}selected{% endif %}>{{ h }}</option>{% endfor %}
+                </select><span class="t-colon">:</span><select class="t-min" onchange="updateCardTime({{ item.pk }}, this)">
+                  {% for m in minute_options %}<option value="{{ m }}" {% if m == item.start_time_str|slice:"3:" %}selected{% endif %}>{{ m }}</option>{% endfor %}
+                </select>
+              </div>
+              <span class="t-arrow">↓</span>
+              <div class="time-pick t-end">
+                <select class="t-hour" onchange="updateCardTime({{ item.pk }}, this)">
+                  {% for h in hour_options %}<option value="{{ h }}" {% if h == item.end_time_str|slice:":2" %}selected{% endif %}>{{ h }}</option>{% endfor %}
+                </select><span class="t-colon">:</span><select class="t-min" onchange="updateCardTime({{ item.pk }}, this)">
+                  {% for m in minute_options %}<option value="{{ m }}" {% if m == item.end_time_str|slice:"3:" %}selected{% endif %}>{{ m }}</option>{% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="t-card-main">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="t-name">{{ item.name }}</span>
+                {% if days|length > 1 %}
+                <select class="t-day-move" onchange="updateCardDay({{ item.pk }}, this)" title="日を移動">
+                  {% for d in days %}<option value="{{ d }}" {% if d == day.number %}selected{% endif %}>{{ d }}日目へ</option>{% endfor %}
+                </select>
+                {% endif %}
+              </div>
+              {% if item.memo %}<div class="t-memo-text" title="{{ item.memo }}">{{ item.memo }}</div>{% endif %}
+              {% if item.card_type == 'wake' %}
+              <div class="t-alarm-row">
+                <label>
+                  <input type="checkbox" {% if item.alarm_enabled %}checked{% endif %} onchange="updateAlarm({{ item.pk }}, this)">
+                  🔔 アラーム
+                </label>
+                {% if item.alarm_enabled and item.calendar_url %}
+                <a href="{{ item.calendar_url }}" target="_blank" rel="noopener">📅 カレンダーに追加</a>
+                {% endif %}
+              </div>
+              {% endif %}
+              {% if plan.group_id and is_owner %}
+              <div class="t-approval-row">
+                <label>
+                  <input type="checkbox" {% if item.approval_enabled %}checked{% endif %} onchange="updateApproval({{ item.pk }}, this)">
+                  ✅承認機能
+                </label>
+                {% if item.approval_enabled %}
+                <span class="approval-buttons">
+                  <button type="button" class="approve-btn {% if item.my_response == 'approved' %}active{% endif %}" onclick="setResponse({{ item.pk }}, 'approved')">承諾</button>
+                  <button type="button" class="reject-btn {% if item.my_response == 'rejected' %}active{% endif %}" onclick="setResponse({{ item.pk }}, 'rejected')">拒否</button>
+                  <span class="approval-tally">{{ item.approved_count }}/{{ item.member_count }} 承諾{% if item.rejected_count %}・{{ item.rejected_count }} 拒否{% endif %}</span>
+                </span>
+                {% endif %}
+              </div>
+              {% if item.reject_comments %}
+              <div class="reject-comments">
+                {% for r in item.reject_comments %}
+                <div class="reject-comment">🚫 <strong>{{ r.user.username }}</strong>: {{ r.comment }}</div>
+                {% endfor %}
+              </div>
+              {% endif %}
+              {% elif plan.group_id and item.approval_enabled %}
+              <div class="t-approval-row">
+                <span class="approval-buttons">
+                  <button type="button" class="approve-btn {% if item.my_response == 'approved' %}active{% endif %}" onclick="setResponse({{ item.pk }}, 'approved')">承諾</button>
+                  <button type="button" class="reject-btn {% if item.my_response == 'rejected' %}active{% endif %}" onclick="setResponse({{ item.pk }}, 'rejected')">拒否</button>
+                </span>
+              </div>
+              {% endif %}
+            </div>
+            <button class="t-del" onclick="removeItem({{ item.pk }}, this)" title="削除">×</button>
+          </div>
+          {% empty %}
+          <div class="timeline-empty-hint">左のカードをドラッグしてここにドロップ</div>
+          {% endfor %}
+        </div>
       </div>
     </div>
     {% endfor %}
@@ -92,11 +254,84 @@
   <input type="hidden" name="start_date" value="{{ plan.start_date|date:'Y-m-d'|default:'' }}">
   <input type="hidden" name="end_date" value="{{ plan.end_date|date:'Y-m-d'|default:'' }}">
 </form>
+
+<div class="modal-overlay" id="add-modal" onclick="if(event.target===this) closeAddModal()">
+  <div class="modal-box">
+    <h3><span class="dot" id="modal-dot"></span><span id="modal-title"></span></h3>
+    <div class="form-group">
+      <label>日</label>
+      <select id="modal-day">
+        {% for d in days %}<option value="{{ d }}">{{ d }}日目</option>{% endfor %}
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group">
+        <label>開始時刻</label>
+        <div class="modal-time-pick">
+          <select id="modal-time-hour" onchange="syncModalEndTime()">
+            {% for h in hour_options %}<option value="{{ h }}" {% if h == '09' %}selected{% endif %}>{{ h }}</option>{% endfor %}
+          </select>
+          <span>:</span>
+          <select id="modal-time-min" onchange="syncModalEndTime()">
+            {% for m in minute_options %}<option value="{{ m }}" {% if m == '00' %}selected{% endif %}>{{ m }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>終了時刻</label>
+        <div class="modal-time-pick">
+          <select id="modal-end-hour">
+            {% for h in hour_options %}<option value="{{ h }}" {% if h == '10' %}selected{% endif %}>{{ h }}</option>{% endfor %}
+          </select>
+          <span>:</span>
+          <select id="modal-end-min">
+            {% for m in minute_options %}<option value="{{ m }}" {% if m == '00' %}selected{% endif %}>{{ m }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>メモ</label>
+      <textarea id="modal-memo" rows="3" placeholder="任意"></textarea>
+    </div>
+    <div class="modal-alarm-row" id="modal-alarm-row">
+      <label>
+        <input type="checkbox" id="modal-alarm">
+        🔔 アラームを設定する
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="closeAddModal()">キャンセル</button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="submitAddModal()">予定表に追加</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="share-modal" onclick="if(event.target===this) closeShareModal()">
+  <div class="modal-box">
+    <h3>🔗 プランを共有</h3>
+    <p style="font-size:13px;color:#666;margin-bottom:14px">このリンクを知っている人は、ログインなしで予定表を閲覧できます（編集はできません）。</p>
+    <div class="form-group">
+      <label>共有リンク</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="share-link" readonly value="{{ share_url }}" style="flex:1;padding:9px 12px;border:1px solid #d0d0cc;border-radius:8px;font-size:13px;color:#1a1a1a;background:#fafaf8">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="copyShareLink()" id="share-copy-btn">コピー</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <a class="btn btn-sm" style="background:#06C755;color:#fff" href="https://social-plugins.line.me/lineit/share?url={{ share_url|urlencode }}" target="_blank" rel="noopener">LINEで共有</a>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="closeShareModal()">閉じる</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block extra_js %}
 <script>
 const PLAN_ID = {{ plan.pk }};
 const CSRF = '{{ csrf_token }}';
+const SLOT_HEIGHT = {{ slot_height }};
+const HOUR_HEIGHT = {{ hour_height }};
+const DEFAULT_SCROLL_HOUR = 6;
 let draggingTpl = null;
 let draggingItem = null;
 
@@ -107,84 +342,282 @@ function palDragStart(e) {
 }
 
 function itemDragStart(e) {
-  draggingItem = {id: e.currentTarget.dataset.item, day: e.currentTarget.dataset.day, el: e.currentTarget};
+  draggingItem = {id: e.currentTarget.dataset.item, day: e.currentTarget.dataset.day};
   draggingTpl = null;
   e.dataTransfer.effectAllowed = 'move';
 }
 
-function removeHint(zone) {
-  const h = zone.querySelector('.drop-hint');
-  if (h) h.remove();
+// In-memory record of which day is showing and how far each day's timeline is
+// scrolled. Persisted to sessionStorage across the full-page reloads this app
+// does after every edit, so the view doesn't keep jumping back to day 1 / 6:00.
+let scrollState = {day: '1', main: 0, days: {}};
+
+function getActiveDay() {
+  const select = document.getElementById('day-select');
+  return select ? select.value : '1';
 }
 
-function addHintIfEmpty(zone) {
-  if (!zone.querySelector('.s-card')) {
-    if (!zone.querySelector('.drop-hint')) {
-      const h = document.createElement('div');
-      h.className = 'drop-hint';
-      h.textContent = 'ここにカードをドロップ';
-      zone.appendChild(h);
-    }
+function activateDay(day) {
+  day = String(day);
+  document.querySelectorAll('.day-block').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.day === day);
+  });
+  const select = document.getElementById('day-select');
+  if (select) select.value = day;
+  scrollState.day = day;
+  const outer = document.getElementById('outer-' + day);
+  if (outer) {
+    outer.scrollTop = (scrollState.days && scrollState.days[day] != null)
+      ? scrollState.days[day]
+      : DEFAULT_SCROLL_HOUR * HOUR_HEIGHT;
   }
 }
 
-async function onDrop(e, day) {
+function switchDay(day) {
+  activateDay(day);
+}
+
+function saveScroll() {
+  scrollState.main = document.getElementById('timeline-wrap').scrollTop;
+  scrollState.days = scrollState.days || {};
+  const activeDay = getActiveDay();
+  const activeOuter = document.getElementById('outer-' + activeDay);
+  if (activeOuter) scrollState.days[activeDay] = activeOuter.scrollTop;
+  scrollState.day = activeDay;
+  sessionStorage.setItem('scrollState-' + PLAN_ID, JSON.stringify(scrollState));
+}
+
+function restoreScroll() {
+  const raw = sessionStorage.getItem('scrollState-' + PLAN_ID);
+  if (raw) {
+    sessionStorage.removeItem('scrollState-' + PLAN_ID);
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') scrollState = Object.assign(scrollState, parsed);
+    } catch (e) { /* ignore malformed state */ }
+  }
+  const wrap = document.getElementById('timeline-wrap');
+  if (wrap) wrap.scrollTop = scrollState.main || 0;
+  activateDay(scrollState.day || '1');
+}
+restoreScroll();
+
+function filterPalette(type) {
+  let visibleCount = 0;
+  document.querySelectorAll('.p-card').forEach(function(el) {
+    const match = type === 'all' || el.dataset.type === type;
+    el.style.display = match ? '' : 'none';
+    if (match) visibleCount++;
+  });
+  const hint = document.getElementById('palette-empty-hint');
+  if (hint) hint.style.display = visibleCount === 0 ? '' : 'none';
+  sessionStorage.setItem('paletteFilter-' + PLAN_ID, type);
+}
+
+function restorePaletteFilter() {
+  const saved = sessionStorage.getItem('paletteFilter-' + PLAN_ID) || 'all';
+  const select = document.getElementById('type-filter');
+  if (select) select.value = saved;
+  filterPalette(saved);
+}
+restorePaletteFilter();
+
+let modalTpl = null;
+
+function openAddModal(el) {
+  modalTpl = {tpl: el.dataset.tpl, name: el.dataset.name, type: el.dataset.type};
+  document.getElementById('modal-dot').className = 'dot dot-' + modalTpl.type;
+  document.getElementById('modal-title').textContent = modalTpl.name + ' を追加';
+  document.getElementById('modal-day').value = getActiveDay();
+  document.getElementById('modal-time-hour').value = '09';
+  document.getElementById('modal-time-min').value = '00';
+  syncModalEndTime();
+  document.getElementById('modal-memo').value = '';
+  document.getElementById('modal-alarm').checked = false;
+  document.getElementById('modal-alarm-row').classList.toggle('show', modalTpl.type === 'wake');
+  document.getElementById('add-modal').classList.add('open');
+}
+
+function syncModalEndTime() {
+  const h = parseInt(document.getElementById('modal-time-hour').value, 10);
+  const m = parseInt(document.getElementById('modal-time-min').value, 10);
+  const total = (h * 60 + m + 60) % (24 * 60); // +1 hour, wrapping past midnight
+  document.getElementById('modal-end-hour').value = String(Math.floor(total / 60)).padStart(2, '0');
+  document.getElementById('modal-end-min').value = String(total % 60).padStart(2, '0');
+}
+
+function closeAddModal() {
+  document.getElementById('add-modal').classList.remove('open');
+  modalTpl = null;
+}
+
+function openShareModal() {
+  document.getElementById('share-modal').classList.add('open');
+}
+
+function closeShareModal() {
+  document.getElementById('share-modal').classList.remove('open');
+}
+
+async function copyShareLink() {
+  const input = document.getElementById('share-link');
+  const btn = document.getElementById('share-copy-btn');
+  try {
+    await navigator.clipboard.writeText(input.value);
+  } catch (e) {
+    input.select();
+    document.execCommand('copy');
+  }
+  const original = btn.textContent;
+  btn.textContent = 'コピーしました';
+  setTimeout(function() { btn.textContent = original; }, 1500);
+}
+
+function timeToMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+async function submitAddModal() {
+  if (!modalTpl) return;
+  const day = document.getElementById('modal-day').value;
+  const startTime = document.getElementById('modal-time-hour').value + ':' + document.getElementById('modal-time-min').value;
+  const endTime = document.getElementById('modal-end-hour').value + ':' + document.getElementById('modal-end-min').value;
+  const memo = document.getElementById('modal-memo').value;
+  const alarmEnabled = document.getElementById('modal-alarm').checked;
+  let duration = 60;
+  if (startTime && endTime) {
+    duration = timeToMinutes(endTime) - timeToMinutes(startTime);
+    if (duration <= 0) duration += 24 * 60; // end time past midnight
+  }
+  await fetch('/api/plan/' + PLAN_ID + '/add/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({day: day, template_id: modalTpl.tpl, start_time: startTime, duration_minutes: duration, memo: memo, alarm_enabled: alarmEnabled})
+  });
+  saveScroll();
+  location.reload();
+}
+
+// Snap a pixel offset within a day's timeline to the nearest 15-minute "HH:MM".
+function pxToTime(y) {
+  const slotsPerDay = 24 * 4;
+  let slot = Math.round(y / SLOT_HEIGHT);
+  slot = Math.max(0, Math.min(slot, slotsPerDay - 1));
+  const totalMin = slot * 15;
+  const h = String(Math.floor(totalMin / 60)).padStart(2, '0');
+  const m = String(totalMin % 60).padStart(2, '0');
+  return h + ':' + m;
+}
+
+async function addItem(day, startTime) {
+  await fetch('/api/plan/' + PLAN_ID + '/add/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({day: day, template_id: draggingTpl.tpl, start_time: startTime})
+  });
+}
+
+async function moveItem(id, day, startTime) {
+  await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({day: day, start_time: startTime})
+  });
+}
+
+async function onTimelineDrop(e, day) {
   e.preventDefault();
-  const zone = document.getElementById('zone-' + day);
-  zone.classList.remove('drag-over');
-
+  const timeline = document.getElementById('timeline-' + day);
+  timeline.classList.remove('drag-over');
+  const rect = timeline.getBoundingClientRect();
+  const startTime = pxToTime(e.clientY - rect.top);
   if (draggingTpl) {
-    const res = await fetch('/api/plan/' + PLAN_ID + '/add/', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-      body: JSON.stringify({day: day, template_id: draggingTpl.tpl})
-    });
-    const data = await res.json();
-    removeHint(zone);
-    const card = makeCard(data.id, data.card_type, data.name, day);
-    zone.appendChild(card);
-    draggingTpl = null;
-  } else if (draggingItem && String(draggingItem.day) !== String(day)) {
-    await fetch('/api/plan/' + PLAN_ID + '/reorder/', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-      body: JSON.stringify([{id: draggingItem.id, day: day, order: 999}])
-    });
-    const oldZone = document.getElementById('zone-' + draggingItem.day);
-    draggingItem.el.dataset.day = day;
-    removeHint(zone);
-    zone.appendChild(draggingItem.el);
-    addHintIfEmpty(oldZone);
-    draggingItem = null;
+    await addItem(day, startTime);
+  } else if (draggingItem) {
+    await moveItem(draggingItem.id, day, startTime);
   }
+  draggingTpl = null;
+  draggingItem = null;
+  saveScroll();
+  location.reload();
 }
 
-function makeCard(id, type, name, day) {
-  const typeLabels = {move:'移動', eat:'食事', see:'観光', stay:'宿泊', free:'フリー'};
-  const div = document.createElement('div');
-  div.className = 's-card';
-  div.draggable = true;
-  div.dataset.item = id;
-  div.dataset.day = day;
-  div.ondragstart = itemDragStart;
-  div.innerHTML = `<span class="dot dot-${type}"></span>
-    <div class="s-card-info">
-      <div class="s-card-type">${typeLabels[type]||type}</div>
-      <div class="s-card-name">${name}</div>
-    </div>
-    <button class="s-card-del" onclick="removeItem(${id}, this)" title="削除">×</button>`;
-  return div;
+function readTimePick(card, cls) {
+  const wrap = card.querySelector('.' + cls);
+  return wrap.querySelector('.t-hour').value + ':' + wrap.querySelector('.t-min').value;
+}
+
+async function updateCardTime(id, input) {
+  const card = input.closest('.t-card');
+  const startTime = readTimePick(card, 't-start');
+  const endTime = readTimePick(card, 't-end');
+  let duration = 60;
+  if (startTime && endTime) {
+    duration = timeToMinutes(endTime) - timeToMinutes(startTime);
+    if (duration <= 0) duration += 24 * 60; // end time past midnight
+  }
+  await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({start_time: startTime || null, duration_minutes: duration})
+  });
+  saveScroll();
+  location.reload();
+}
+
+async function updateCardDay(id, select) {
+  await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({day: select.value})
+  });
+  saveScroll();
+  location.reload();
+}
+
+async function updateAlarm(id, checkbox) {
+  await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({alarm_enabled: checkbox.checked})
+  });
+  saveScroll();
+  location.reload();
+}
+
+async function updateApproval(id, checkbox) {
+  await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({approval_enabled: checkbox.checked})
+  });
+  saveScroll();
+  location.reload();
+}
+
+async function setResponse(id, status) {
+  let comment = '';
+  if (status === 'rejected') {
+    comment = prompt('拒否の理由があれば入力してください（任意）', '');
+    if (comment === null) return; // user cancelled
+  }
+  await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/response/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({status: status, comment: comment})
+  });
+  saveScroll();
+  location.reload();
 }
 
 async function removeItem(id, btn) {
-  const card = btn.closest('.s-card');
-  const zone = card.closest('.drop-zone');
   await fetch('/api/plan/' + PLAN_ID + '/remove/' + id + '/', {
     method: 'POST',
     headers: {'X-CSRFToken': CSRF}
   });
-  card.remove();
-  addHintIfEmpty(zone);
+  saveScroll();
+  location.reload();
 }
 
 function savePlan() {

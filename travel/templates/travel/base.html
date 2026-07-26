@@ -32,17 +32,22 @@ a:hover{text-decoration:underline}
 .form-group input:focus,.form-group select:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
 .error-msg{background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px}
 .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:500}
+.badge-wake{background:#fef9c3;color:#854d0e}
 .badge-move{background:#dbeafe;color:#1d4ed8}
 .badge-eat{background:#fef3c7;color:#92400e}
 .badge-see{background:#d1fae5;color:#065f46}
 .badge-stay{background:#ede9fe;color:#4c1d95}
 .badge-free{background:#f3f4f6;color:#374151}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.dot-wake{background:#fbbf24}
 .dot-move{background:#3b82f6}
 .dot-eat{background:#f59e0b}
 .dot-see{background:#10b981}
 .dot-stay{background:#8b5cf6}
 .dot-free{background:#9ca3af}
+.nav-notif{position:relative;font-size:16px;padding:6px 10px;border-radius:6px}
+.nav-notif:hover{background:#f0f0ec}
+.nav-notif-badge{position:absolute;top:0;right:2px;background:#dc2626;color:#fff;font-size:10px;font-weight:600;line-height:1;padding:2px 5px;border-radius:10px}
 </style>
 {% block extra_css %}{% endblock %}
 </head>
@@ -53,6 +58,8 @@ a:hover{text-decoration:underline}
   <div class="nav-spacer"></div>
   <a class="nav-link" href="/">マイプラン</a>
   <a class="nav-link" href="/cards/">予定カード</a>
+  <a class="nav-link" href="/groups/">グループ</a>
+  <a class="nav-notif" href="/notifications/" title="通知">🔔{% if unread_notification_count %}<span class="nav-notif-badge">{{ unread_notification_count }}</span>{% endif %}</a>
   <span class="nav-user">{{ user.username }}</span>
   <form method="post" action="/logout/" style="margin:0"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
     <button type="submit" class="btn btn-secondary btn-sm">ログアウト</button>

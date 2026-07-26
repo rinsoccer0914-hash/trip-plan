@@ -4,29 +4,42 @@
 <div class="container">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
     <h1 style="font-size:22px;font-weight:600">マイプラン</h1>
-    <a href="/plan/new/" class="btn btn-primary">＋ 新しいプラン</a>
+    <a href="/plan/new/" class="btn btn-primary">＋ 新しい旅行プラン</a>
   </div>
 
   {% if plans %}
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px">
     {% for plan in plans %}
     <div class="card" style="padding:20px;transition:border-color .15s;cursor:pointer" onclick="location.href='/plan/{{ plan.pk }}/edit/'">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px">
         <div style="font-size:16px;font-weight:600">{{ plan.name }}</div>
-        <span class="badge" style="background:#dbeafe;color:#1d4ed8;white-space:nowrap">{{ plan.day_count }}日間</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <span class="badge" style="background:#dbeafe;color:#1d4ed8;white-space:nowrap">{{ plan.day_count }}日間</span>
+          {% if plan.user == user %}
+          <form method="post" action="/plan/{{ plan.pk }}/like/" onclick="event.stopPropagation()" style="margin:0">
+            {% csrf_token %}
+            <button type="submit" title="{% if plan.is_liked %}いいねを取り消す{% else %}いいね{% endif %}" style="background:none;border:none;cursor:pointer;font-size:18px;line-height:1;padding:0">{% if plan.is_liked %}❤️{% else %}🤍{% endif %}</button>
+          </form>
+          {% endif %}
+        </div>
       </div>
+      {% if plan.user != user %}
+      <div style="font-size:12px;color:#888;margin-bottom:6px">👥 {{ plan.group.name }}（作成者: {{ plan.user.username }}）</div>
+      {% endif %}
       {% if plan.start_date %}
-      <div style="font-size:13px;color:#666;margin-bottom:6px">📅 {{ plan.start_date }} 〜 {{ plan.end_date }}</div>
+      <div style="font-size:13px;color:#666;margin-bottom:6px">📅 {{ plan.start_date|date:"Y/m/d" }} 〜 {{ plan.end_date|date:"Y/m/d" }}</div>
       {% else %}
       <div style="font-size:13px;color:#aaa;margin-bottom:6px">📅 日程未設定</div>
       {% endif %}
       <div style="font-size:13px;color:#666;margin-bottom:14px">📋 予定 {{ plan.total_cards }}件</div>
       <div style="display:flex;gap:8px">
         <a href="/plan/{{ plan.pk }}/edit/" class="btn btn-secondary btn-sm" onclick="event.stopPropagation()">編集</a>
+        {% if plan.user == user %}
         <form method="post" action="/plan/{{ plan.pk }}/delete/" onclick="event.stopPropagation()" style="margin:0">
           {% csrf_token %}
           <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('このプランを削除しますか？')">削除</button>
         </form>
+        {% endif %}
       </div>
     </div>
     {% endfor %}
@@ -35,8 +48,8 @@
   <div style="text-align:center;padding:80px 20px;color:#aaa">
     <div style="font-size:48px;margin-bottom:16px">🗺</div>
     <div style="font-size:16px;margin-bottom:8px">まだプランがありません</div>
-    <div style="font-size:13px;margin-bottom:20px">「新しいプラン」からプランを作成しましょう</div>
-    <a href="/plan/new/" class="btn btn-primary">＋ 新しいプラン</a>
+    <div style="font-size:13px;margin-bottom:20px">「新しい旅行プラン」からプランを作成しましょう</div>
+    <a href="/plan/new/" class="btn btn-primary">＋ 新しい旅行プラン</a>
   </div>
   {% endif %}
 </div>

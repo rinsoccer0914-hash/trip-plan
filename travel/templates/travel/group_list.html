@@ -1,0 +1,42 @@
+{% extends 'travel/base.html' %}
+{% block title %}グループ - TravelPlan{% endblock %}
+{% block content %}
+<div class="container" style="max-width:720px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+    <h1 style="font-size:22px;font-weight:600">グループ</h1>
+    <a href="/groups/new/" class="btn btn-primary">＋ 新しいグループ</a>
+  </div>
+
+  <div class="card" style="margin-bottom:24px">
+    <h2 style="font-size:15px;font-weight:600;margin-bottom:16px">自分が作ったグループ</h2>
+    {% if owned_groups %}
+    <div style="display:flex;flex-direction:column;gap:8px">
+      {% for group in owned_groups %}
+      <a href="/groups/{{ group.pk }}/" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #e5e5e0;border-radius:8px;background:#fafaf8;color:inherit">
+        <span style="flex:1;font-size:14px;font-weight:500">{{ group.name }}</span>
+        <span style="font-size:12px;color:#888">メンバー {{ group.members.count|add:1 }}人</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:24px;color:#aaa;font-size:13px">まだグループがありません</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:15px;font-weight:600;margin-bottom:16px">参加しているグループ</h2>
+    {% if joined_groups %}
+    <div style="display:flex;flex-direction:column;gap:8px">
+      {% for group in joined_groups %}
+      <a href="/groups/{{ group.pk }}/" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #e5e5e0;border-radius:8px;background:#fafaf8;color:inherit">
+        <span style="flex:1;font-size:14px;font-weight:500">{{ group.name }}</span>
+        <span style="font-size:12px;color:#888">オーナー: {{ group.owner.username }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:24px;color:#aaa;font-size:13px">参加しているグループはありません</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

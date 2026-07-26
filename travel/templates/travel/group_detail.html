@@ -1,0 +1,72 @@
+{% extends 'travel/base.html' %}
+{% block title %}{{ group.name }} - グループ - TravelPlan{% endblock %}
+{% block content %}
+<div class="container" style="max-width:640px">
+  <a href="/groups/" style="font-size:13px;color:#666;display:inline-flex;align-items:center;gap:4px;margin-bottom:20px">← グループ一覧に戻る</a>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+    <h1 style="font-size:22px;font-weight:600">{{ group.name }}</h1>
+    {% if is_owner %}
+    <form method="post" action="/groups/{{ group.pk }}/delete/" style="margin:0" onsubmit="return confirm('このグループを削除しますか？共有されているプランは自分専用に戻ります。')">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger btn-sm">グループを削除</button>
+    </form>
+    {% else %}
+    <form method="post" action="/groups/{{ group.pk }}/leave/" style="margin:0" onsubmit="return confirm('このグループから抜けますか？')">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary btn-sm">グループから抜ける</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+
+  <div class="card" style="margin-bottom:24px">
+    <h2 style="font-size:15px;font-weight:600;margin-bottom:16px">メンバー</h2>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:{% if is_owner %}20px{% else %}0{% endif %}">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #e5e5e0;border-radius:8px;background:#fafaf8">
+        <span style="flex:1;font-size:14px;font-weight:500">{{ group.owner.username }}</span>
+        <span class="badge" style="background:#dbeafe;color:#1d4ed8">オーナー</span>
+      </div>
+      {% for member in group.members.all %}
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #e5e5e0;border-radius:8px;background:#fafaf8">
+        <span style="flex:1;font-size:14px;font-weight:500">{{ member.username }}</span>
+        {% if is_owner %}
+        <form method="post" action="/groups/{{ group.pk }}/remove-member/{{ member.pk }}/" style="margin:0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('{{ member.username }}をグループから外しますか？')">外す</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if is_owner %}
+    <form method="post" style="display:flex;gap:10px;align-items:flex-end">
+      {% csrf_token %}
+      <div class="form-group" style="flex:1;margin-bottom:0">
+        <label>ユーザー名でメンバーを追加</label>
+        <input type="text" name="username" placeholder="ユーザー名" required>
+      </div>
+      <button type="submit" class="btn btn-primary">追加</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:15px;font-weight:600;margin-bottom:16px">このグループと共有されているプラン</h2>
+    {% if shared_plans %}
+    <div style="display:flex;flex-direction:column;gap:8px">
+      {% for plan in shared_plans %}
+      <a href="/plan/{{ plan.pk }}/edit/" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #e5e5e0;border-radius:8px;background:#fafaf8;color:inherit">
+        <span style="flex:1;font-size:14px;font-weight:500">{{ plan.name }}</span>
+        <span style="font-size:12px;color:#888">作成者: {{ plan.user.username }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:24px;color:#aaa;font-size:13px">まだ共有されているプランはありません。<br>プラン編集画面の「グループ」欄からこのグループを選ぶと共有されます。</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
