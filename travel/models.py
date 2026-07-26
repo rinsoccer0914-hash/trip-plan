@@ -22,6 +22,19 @@ class Group(models.Model):
         return {self.owner_id, *self.members.values_list('pk', flat=True)}
 
 
+class GroupMessage(models.Model):
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='messages')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.user.username}: {self.text[:30]}"
+
+
 class TravelPlan(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='plans')
     name = models.CharField(max_length=200)
@@ -30,6 +43,8 @@ class TravelPlan(models.Model):
     share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     is_liked = models.BooleanField(default=False)
     group = models.ForeignKey(Group, on_delete=models.SET_NULL, null=True, blank=True, related_name='plans')
+    participant_count = models.PositiveIntegerField(default=1)
+    warikan_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -49,7 +64,20 @@ class TravelPlan(models.Model):
     def total_cards(self):
         return self.schedule_items.count()
 
+    @property
+    def total_cost(self):
+        return sum(item.cost for item in self.schedule_items.all())
+
+    @property
+    def total_cost_per_person(self):
+        return round(self.total_cost / (self.participant_count or 1))
+
     def can_edit(self, user):
+        """Only the owner may add/move/edit/delete schedule items or plan settings."""
+        return self.user_id == user.id
+
+    def can_view(self, user):
+        """Owner or a member of the plan's group may open the plan and respond to cards."""
         if self.user_id == user.id:
             return True
         return bool(self.group_id and self.group.is_member(user))
@@ -87,14 +115,23 @@ class ScheduleItem(models.Model):
     start_time = models.TimeField(null=True, blank=True)
     duration_minutes = models.PositiveIntegerField(default=60)
     memo = models.TextField(blank=True)
+    from_location = models.CharField(max_length=200, blank=True)
+    to_location = models.CharField(max_length=200, blank=True)
     alarm_enabled = models.BooleanField(default=False)
     approval_enabled = models.BooleanField(default=False)
+    cost = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['day_number', 'order']
 
     def __str__(self):
         return f"{self.plan.name} - Day{self.day_number}: {self.name}"
+
+    @property
+    def cost_per_person(self):
+        if not self.cost:
+            return 0
+        return round(self.cost / (self.plan.participant_count or 1))
 
 
 class CardResponse(models.Model):
@@ -106,6 +143,7 @@ class CardResponse(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES)
     comment = models.TextField(blank=True)
+    is_read = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

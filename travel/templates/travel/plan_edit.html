@@ -16,12 +16,17 @@
 .timeline-wrap{flex:1;overflow-y:auto;padding:20px;background:#f5f5f0}
 .plan-bar{background:#fff;border-bottom:1px solid #e5e5e0;padding:12px 20px;display:flex;align-items:center;gap:12px}
 .plan-bar input{flex:1;border:none;font-size:16px;font-weight:600;color:#1a1a1a;outline:none;background:none}
-.day-switcher{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:0 4px;position:sticky;top:0;z-index:5}
+.day-switcher{display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:0 4px;position:sticky;top:0;z-index:5;flex-wrap:wrap}
 .day-switcher-label{font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.06em}
-.day-switcher select{font-size:14px;font-weight:600;padding:6px 10px;border:1px solid #d0d0cc;border-radius:8px;background:#fff;color:#1a1a1a;cursor:pointer}
+.day-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.day-tab{padding:6px 16px;border:1px solid #d0d0cc;border-radius:8px;background:#fff;color:#1a1a1a;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.day-tab:hover{border-color:#93c5fd;color:#2563eb}
+.day-tab.active{background:#2563eb;border-color:#2563eb;color:#fff}
 .day-block{display:none;margin-bottom:28px}
 .day-block.active{display:block}
 .top-bar{background:#fff;border-bottom:1px solid #e5e5e0;padding:10px 20px;display:flex;align-items:center;gap:12px}
+.cost-bar{background:#fffbeb;border-bottom:1px solid #fde68a;padding:8px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.cost-bar-label{font-size:13px;font-weight:600;color:#92400e}
 
 .timeline-outer{display:flex;border:1px solid #e5e5e0;border-radius:10px;background:#fff;max-height:calc(100vh - 220px);min-height:280px;overflow-y:auto}
 .ruler{width:52px;flex-shrink:0;position:relative;border-right:1px solid #eee;background:#fafaf8}
@@ -42,6 +47,7 @@
 .t-card.type-stay{border-left-color:#8b5cf6}
 .t-card.type-free{border-left-color:#9ca3af}
 .t-card-time{display:flex;flex-direction:column;align-items:center;flex-shrink:0;line-height:1.1}
+.t-card-time-static{font-size:13px;font-weight:600;color:#1a1a1a;width:70px;text-align:center}
 .time-pick{display:flex;align-items:center;gap:1px}
 .time-pick select{border:none;background:transparent;font-size:13px;font-weight:600;padding:0;color:#1a1a1a;text-align:center;text-align-last:center;cursor:pointer}
 .time-pick .t-hour{width:32px}
@@ -53,7 +59,17 @@
 .t-card .t-del{position:absolute;top:3px;right:3px;background:none;border:none;color:#bbb;cursor:pointer;font-size:17px;line-height:1;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .t-card .t-del:hover{color:#dc2626;background:#fef2f2}
 .t-memo-text{font-size:12px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:1px}
-.t-day-move{font-size:10px;color:#999;border:1px solid #e5e5e0;border-radius:4px;padding:1px 3px;background:#fafaf8;cursor:pointer;flex-shrink:0}
+.t-route-row{display:flex;align-items:center;gap:4px;font-size:11px;color:#1d4ed8;margin-bottom:2px}
+.t-route-input{width:80px;font-size:11px;padding:1px 4px;border:1px solid #dbeafe;border-radius:4px;background:#eff6ff;color:#1d4ed8}
+.t-route-arrow{color:#93c5fd}
+.t-move-row{display:flex;align-items:center;gap:4px;font-size:11px;color:#666}
+.t-move-row label{color:#999}
+.t-move-from{font-weight:600;color:#1a1a1a}
+.t-move-arrow{color:#bbb}
+.t-move-to{font-size:11px;padding:1px 4px;border:1px solid #e0e0db;border-radius:4px;background:#fafaf8;color:#1a1a1a;cursor:pointer}
+.t-cost-row{display:flex;align-items:center;gap:3px;font-size:11px;color:#92400e;flex-wrap:wrap}
+.t-cost-row input{width:64px;border:1px solid #fde68a;border-radius:4px;padding:1px 4px;font-size:11px;background:#fffbeb;color:#92400e}
+.t-cost-per-person{font-weight:600}
 .t-alarm-row{display:flex;align-items:center;gap:6px;font-size:11px;color:#92400e}
 .t-alarm-row label{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
 .t-alarm-row input[type="checkbox"]{cursor:pointer}
@@ -67,6 +83,9 @@
 .reject-btn:hover{border-color:#dc2626;color:#dc2626}
 .approve-btn.active{background:#d1fae5;border-color:#10b981;color:#065f46}
 .reject-btn.active{background:#fee2e2;border-color:#dc2626;color:#991b1b}
+.approve-btn:disabled,.reject-btn:disabled{cursor:not-allowed;opacity:.6}
+.approve-btn:disabled:not(.active),.reject-btn:disabled:not(.active){opacity:.35}
+.approval-locked-note{font-size:10px;color:#999;white-space:nowrap}
 .approval-tally{color:#666;white-space:nowrap}
 .reject-comments{display:flex;flex-direction:column;gap:2px;margin-top:2px}
 .reject-comment{font-size:11px;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:4px 8px;white-space:normal;word-break:break-word}
@@ -74,6 +93,10 @@
 .modal-alarm-row{display:none;align-items:center;gap:8px;font-size:13px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 12px;margin-bottom:16px}
 .modal-alarm-row.show{display:flex}
 .modal-alarm-row label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.modal-route-row{display:none;align-items:center;gap:8px;margin-top:8px}
+.modal-route-row.show{display:flex}
+.modal-route-row input{flex:1;padding:8px 10px;border:1px solid #d0d0cc;border-radius:8px;font-size:13px}
+.modal-route-row span{color:#999}
 
 .modal-time-pick{display:flex;align-items:center;gap:6px}
 .modal-time-pick select{width:auto;flex:1;padding:9px 6px;text-align:center}
@@ -84,6 +107,21 @@
 .modal-box{background:#fff;border-radius:12px;padding:24px;width:340px;max-width:90vw;box-shadow:0 10px 30px rgba(0,0,0,.15)}
 .modal-box h3{font-size:15px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
 .modal-box textarea{resize:vertical}
+
+.chat-toggle-btn{position:fixed;bottom:24px;right:24px;width:52px;height:52px;border-radius:50%;background:#2563eb;color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2);z-index:150}
+.chat-toggle-btn:hover{background:#1d4ed8}
+.chat-panel{position:fixed;top:140px;bottom:24px;right:24px;width:320px;max-width:calc(100vw - 32px);background:#fff;border:1px solid #e5e5e0;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.18);display:none;flex-direction:column;z-index:151;overflow:hidden}
+.chat-panel.open{display:flex}
+.chat-panel-head{background:#2563eb;color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:600;flex-shrink:0}
+.chat-panel-close{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;padding:2px 6px}
+.chat-log{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#f5f5f0}
+.chat-message{background:#fff;border:1px solid #e5e5e0;border-radius:10px;padding:6px 10px;max-width:85%;font-size:13px}
+.chat-message.mine{align-self:flex-end;background:#eff6ff;border-color:#bfdbfe}
+.chat-message-meta{font-size:10px;color:#888;margin-bottom:2px;display:flex;gap:6px}
+.chat-message-text{white-space:pre-wrap;word-break:break-word}
+.chat-empty{text-align:center;color:#aaa;font-size:13px;padding:20px}
+.chat-input-row{display:flex;gap:8px;padding:10px;border-top:1px solid #e5e5e0;flex-shrink:0}
+.chat-input-row input{flex:1;padding:8px 10px;border:1px solid #d0d0cc;border-radius:8px;font-size:13px}
 </style>
 {% endblock %}
 {% block content %}
@@ -107,11 +145,32 @@
     {% csrf_token %}
     <button type="submit" title="{% if plan.is_liked %}いいねを取り消す{% else %}いいね{% endif %}" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1;padding:4px">{% if plan.is_liked %}❤️{% else %}🤍{% endif %}</button>
   </form>
+  <form method="post" action="/plan/{{ plan.pk }}/toggle-warikan/" style="margin:0">
+    {% csrf_token %}
+    <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:#666;cursor:pointer;white-space:nowrap">
+      <input type="checkbox" {% if plan.warikan_enabled %}checked{% endif %} onchange="this.form.submit()">
+      💰 割り勘を使う
+    </label>
+  </form>
   {% endif %}
   <button class="btn btn-secondary btn-sm" onclick="openShareModal()">🔗 共有</button>
   <button class="btn btn-primary btn-sm" onclick="savePlan()">保存して戻る</button>
 </div>
+{% if plan.warikan_enabled and is_owner %}
+<div class="cost-bar">
+  <span class="cost-bar-label">💰 割り勘</span>
+  <form method="post" action="/plan/{{ plan.pk }}/set-participants/" style="margin:0;display:flex;align-items:center;gap:6px">
+    {% csrf_token %}
+    <label style="font-size:13px;color:#92400e">人数</label>
+    <input type="number" name="participant_count" min="1" value="{{ plan.participant_count }}" onchange="this.form.submit()" style="width:56px;padding:4px 6px;border:1px solid #fde68a;border-radius:6px;font-size:13px;background:#fff">
+    <span style="font-size:13px;color:#92400e">人</span>
+  </form>
+  <span style="font-size:13px;color:#92400e">合計 <strong>¥{{ plan.total_cost }}</strong></span>
+  <span style="font-size:13px;color:#92400e">一人あたり合計 <strong>¥{{ plan.total_cost_per_person }}</strong></span>
+</div>
+{% endif %}
 <div class="editor-wrap">
+  {% if is_owner %}
   <!-- Palette -->
   <div class="palette">
     <div class="palette-head">
@@ -142,14 +201,15 @@
       <div id="palette-empty-hint" style="display:none;text-align:center;font-size:13px;color:#bbb;padding:20px">この種類のカードはありません</div>
     </div>
   </div>
+  {% endif %}
 
   <!-- Timeline -->
   <div class="timeline-wrap" id="timeline-wrap">
     <div class="day-switcher">
       <span class="day-switcher-label">📅 表示する日</span>
-      <select id="day-select" onchange="switchDay(this.value)">
-        {% for day in days_data %}<option value="{{ day.number }}">{{ day.number }}日目</option>{% endfor %}
-      </select>
+      <div class="day-tabs" id="day-tabs">
+        {% for day in days_data %}<button type="button" class="day-tab" data-day="{{ day.number }}" onclick="switchDay({{ day.number }})">{{ day.number }}日目</button>{% endfor %}
+      </div>
     </div>
     {% for day in days_data %}
     <div class="day-block" data-day="{{ day.number }}">
@@ -160,14 +220,17 @@
           {% endfor %}
         </div>
         <div class="timeline" id="timeline-{{ day.number }}" style="height:{{ day_height }}px"
+             {% if is_owner %}
              ondragover="event.preventDefault()"
              ondragenter="this.classList.add('drag-over')"
              ondragleave="this.classList.remove('drag-over')"
-             ondrop="onTimelineDrop(event, {{ day.number }})">
+             ondrop="onTimelineDrop(event, {{ day.number }})"
+             {% endif %}>
           {% for item in day.items %}
-          <div class="t-card type-{{ item.card_type }}" draggable="true" data-item="{{ item.pk }}" data-day="{{ day.number }}"
+          <div class="t-card type-{{ item.card_type }}" {% if is_owner %}draggable="true"{% endif %} data-item="{{ item.pk }}" data-day="{{ day.number }}"
                style="top:{{ item.top_px }}px;height:{{ item.height_px }}px;left:calc({{ item.left_pct }}% + 4px);width:calc({{ item.width_pct }}% - 8px)"
-               ondragstart="itemDragStart(event)">
+               {% if is_owner %}ondragstart="itemDragStart(event)"{% endif %}>
+            {% if is_owner %}
             <div class="t-card-time">
               <div class="time-pick t-start">
                 <select class="t-hour" onchange="updateCardTime({{ item.pk }}, this)">
@@ -185,26 +248,54 @@
                 </select>
               </div>
             </div>
+            {% else %}
+            <div class="t-card-time t-card-time-static">
+              <div>{{ item.start_time_str }}</div>
+              <span class="t-arrow">↓</span>
+              <div>{{ item.end_time_str }}</div>
+            </div>
+            {% endif %}
             <div class="t-card-main">
               <div style="display:flex;align-items:center;gap:6px">
                 <span class="t-name">{{ item.name }}</span>
-                {% if days|length > 1 %}
-                <select class="t-day-move" onchange="updateCardDay({{ item.pk }}, this)" title="日を移動">
-                  {% for d in days %}<option value="{{ d }}" {% if d == day.number %}selected{% endif %}>{{ d }}日目へ</option>{% endfor %}
-                </select>
-                {% endif %}
               </div>
+              {% if item.card_type == 'move' %}
+                {% if is_owner %}
+                <div class="t-route-row">
+                  <input type="text" class="t-route-input t-route-from" placeholder="出発地" value="{{ item.from_location }}" onchange="updateRoute({{ item.pk }})">
+                  <span class="t-route-arrow">→</span>
+                  <input type="text" class="t-route-input t-route-to" placeholder="到着地" value="{{ item.to_location }}" onchange="updateRoute({{ item.pk }})">
+                </div>
+                {% elif item.from_location or item.to_location %}
+                <div class="t-route-row">{{ item.from_location }} → {{ item.to_location }}</div>
+                {% endif %}
+              {% endif %}
               {% if item.memo %}<div class="t-memo-text" title="{{ item.memo }}">{{ item.memo }}</div>{% endif %}
-              {% if item.card_type == 'wake' %}
-              <div class="t-alarm-row">
-                <label>
-                  <input type="checkbox" {% if item.alarm_enabled %}checked{% endif %} onchange="updateAlarm({{ item.pk }}, this)">
-                  🔔 アラーム
-                </label>
-                {% if item.alarm_enabled and item.calendar_url %}
-                <a href="{{ item.calendar_url }}" target="_blank" rel="noopener">📅 カレンダーに追加</a>
-                {% endif %}
+              {% if plan.warikan_enabled and is_owner %}
+              <div class="t-cost-row">
+                💰<input type="number" class="t-cost-input" min="0" step="100" placeholder="金額" value="{% if item.cost %}{{ item.cost }}{% endif %}" onchange="updateCost({{ item.pk }}, this)">円
+                {% if item.cost %}<span class="t-cost-per-person">= ¥{{ item.cost_per_person }}/人（{{ plan.participant_count }}人で割った額）</span>{% endif %}
               </div>
+              {% endif %}
+              {% if item.card_type == 'wake' %}
+                {% if is_owner %}
+                <div class="t-alarm-row">
+                  <label>
+                    <input type="checkbox" {% if item.alarm_enabled %}checked{% endif %} onchange="updateAlarm({{ item.pk }}, this)">
+                    🔔 アラーム
+                  </label>
+                  {% if item.alarm_enabled and item.calendar_url %}
+                  <a href="{{ item.calendar_url }}" target="_blank" rel="noopener">📅 カレンダーに追加</a>
+                  {% endif %}
+                </div>
+                {% elif item.alarm_enabled %}
+                <div class="t-alarm-row">
+                  <span>🔔 アラーム設定済み</span>
+                  {% if item.calendar_url %}
+                  <a href="{{ item.calendar_url }}" target="_blank" rel="noopener">📅 カレンダーに追加</a>
+                  {% endif %}
+                </div>
+                {% endif %}
               {% endif %}
               {% if plan.group_id and is_owner %}
               <div class="t-approval-row">
@@ -214,8 +305,9 @@
                 </label>
                 {% if item.approval_enabled %}
                 <span class="approval-buttons">
-                  <button type="button" class="approve-btn {% if item.my_response == 'approved' %}active{% endif %}" onclick="setResponse({{ item.pk }}, 'approved')">承諾</button>
-                  <button type="button" class="reject-btn {% if item.my_response == 'rejected' %}active{% endif %}" onclick="setResponse({{ item.pk }}, 'rejected')">拒否</button>
+                  <button type="button" class="approve-btn {% if item.my_response == 'approved' %}active{% endif %}" {% if item.my_response %}disabled{% else %}onclick="setResponse({{ item.pk }}, 'approved')"{% endif %}>承諾</button>
+                  <button type="button" class="reject-btn {% if item.my_response == 'rejected' %}active{% endif %}" {% if item.my_response %}disabled{% else %}onclick="setResponse({{ item.pk }}, 'rejected')"{% endif %}>拒否</button>
+                  {% if item.my_response %}<span class="approval-locked-note">（回答済み）</span>{% endif %}
                   <span class="approval-tally">{{ item.approved_count }}/{{ item.member_count }} 承諾{% if item.rejected_count %}・{{ item.rejected_count }} 拒否{% endif %}</span>
                 </span>
                 {% endif %}
@@ -230,16 +322,19 @@
               {% elif plan.group_id and item.approval_enabled %}
               <div class="t-approval-row">
                 <span class="approval-buttons">
-                  <button type="button" class="approve-btn {% if item.my_response == 'approved' %}active{% endif %}" onclick="setResponse({{ item.pk }}, 'approved')">承諾</button>
-                  <button type="button" class="reject-btn {% if item.my_response == 'rejected' %}active{% endif %}" onclick="setResponse({{ item.pk }}, 'rejected')">拒否</button>
+                  <button type="button" class="approve-btn {% if item.my_response == 'approved' %}active{% endif %}" {% if item.my_response %}disabled{% else %}onclick="setResponse({{ item.pk }}, 'approved')"{% endif %}>承諾</button>
+                  <button type="button" class="reject-btn {% if item.my_response == 'rejected' %}active{% endif %}" {% if item.my_response %}disabled{% else %}onclick="setResponse({{ item.pk }}, 'rejected')"{% endif %}>拒否</button>
+                  {% if item.my_response %}<span class="approval-locked-note">（回答済み）</span>{% endif %}
                 </span>
               </div>
               {% endif %}
             </div>
+            {% if is_owner %}
             <button class="t-del" onclick="removeItem({{ item.pk }}, this)" title="削除">×</button>
+            {% endif %}
           </div>
           {% empty %}
-          <div class="timeline-empty-hint">左のカードをドラッグしてここにドロップ</div>
+          <div class="timeline-empty-hint">{% if is_owner %}左のカードをドラッグしてここにドロップ{% else %}この日の予定はまだありません{% endif %}</div>
           {% endfor %}
         </div>
       </div>
@@ -293,6 +388,11 @@
     <div class="form-group">
       <label>メモ</label>
       <textarea id="modal-memo" rows="3" placeholder="任意"></textarea>
+      <div class="modal-route-row" id="modal-route-row">
+        <input type="text" id="modal-from-location" placeholder="出発地">
+        <span>→</span>
+        <input type="text" id="modal-to-location" placeholder="到着地">
+      </div>
     </div>
     <div class="modal-alarm-row" id="modal-alarm-row">
       <label>
@@ -324,6 +424,30 @@
     </div>
   </div>
 </div>
+
+{% if plan.group_id %}
+<button class="chat-toggle-btn" onclick="toggleChat()" id="chat-toggle-btn" title="グループチャット">💬</button>
+<div class="chat-panel" id="chat-panel">
+  <div class="chat-panel-head">
+    <span>💬 {{ plan.group.name }}</span>
+    <button type="button" class="chat-panel-close" onclick="toggleChat()">×</button>
+  </div>
+  <div class="chat-log" id="plan-chat-log">
+    {% for msg in chat_messages %}
+    <div class="chat-message {% if msg.user == user %}mine{% endif %}">
+      <div class="chat-message-meta"><strong>{{ msg.user.username }}</strong><span>{{ msg.created_at|date:"m/d H:i" }}</span></div>
+      <div class="chat-message-text">{{ msg.text }}</div>
+    </div>
+    {% empty %}
+    <div class="chat-empty">まだメッセージがありません</div>
+    {% endfor %}
+  </div>
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" placeholder="メッセージを入力" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
+    <button type="button" class="btn btn-primary btn-sm" onclick="sendChatMessage()">送信</button>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 {% block extra_js %}
 <script>
@@ -353,8 +477,8 @@ function itemDragStart(e) {
 let scrollState = {day: '1', main: 0, days: {}};
 
 function getActiveDay() {
-  const select = document.getElementById('day-select');
-  return select ? select.value : '1';
+  const activeTab = document.querySelector('.day-tab.active');
+  return activeTab ? activeTab.dataset.day : '1';
 }
 
 function activateDay(day) {
@@ -362,8 +486,9 @@ function activateDay(day) {
   document.querySelectorAll('.day-block').forEach(function(el) {
     el.classList.toggle('active', el.dataset.day === day);
   });
-  const select = document.getElementById('day-select');
-  if (select) select.value = day;
+  document.querySelectorAll('.day-tab').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.day === day);
+  });
   scrollState.day = day;
   const outer = document.getElementById('outer-' + day);
   if (outer) {
@@ -435,6 +560,9 @@ function openAddModal(el) {
   document.getElementById('modal-memo').value = '';
   document.getElementById('modal-alarm').checked = false;
   document.getElementById('modal-alarm-row').classList.toggle('show', modalTpl.type === 'wake');
+  document.getElementById('modal-from-location').value = '';
+  document.getElementById('modal-to-location').value = '';
+  document.getElementById('modal-route-row').classList.toggle('show', modalTpl.type === 'move');
   document.getElementById('add-modal').classList.add('open');
 }
 
@@ -485,6 +613,8 @@ async function submitAddModal() {
   const endTime = document.getElementById('modal-end-hour').value + ':' + document.getElementById('modal-end-min').value;
   const memo = document.getElementById('modal-memo').value;
   const alarmEnabled = document.getElementById('modal-alarm').checked;
+  const fromLocation = document.getElementById('modal-from-location').value;
+  const toLocation = document.getElementById('modal-to-location').value;
   let duration = 60;
   if (startTime && endTime) {
     duration = timeToMinutes(endTime) - timeToMinutes(startTime);
@@ -493,7 +623,10 @@ async function submitAddModal() {
   await fetch('/api/plan/' + PLAN_ID + '/add/', {
     method: 'POST',
     headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({day: day, template_id: modalTpl.tpl, start_time: startTime, duration_minutes: duration, memo: memo, alarm_enabled: alarmEnabled})
+    body: JSON.stringify({
+      day: day, template_id: modalTpl.tpl, start_time: startTime, duration_minutes: duration,
+      memo: memo, alarm_enabled: alarmEnabled, from_location: fromLocation, to_location: toLocation,
+    })
   });
   saveScroll();
   location.reload();
@@ -566,6 +699,29 @@ async function updateCardTime(id, input) {
   location.reload();
 }
 
+async function updateCost(id, input) {
+  await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({cost: input.value || 0})
+  });
+  saveScroll();
+  location.reload();
+}
+
+async function updateRoute(id) {
+  const card = document.querySelector('.t-card[data-item="' + id + '"]');
+  const fromLocation = card.querySelector('.t-route-from').value;
+  const toLocation = card.querySelector('.t-route-to').value;
+  await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({from_location: fromLocation, to_location: toLocation})
+  });
+  saveScroll();
+  location.reload();
+}
+
 async function updateCardDay(id, select) {
   await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {
     method: 'POST',
@@ -624,5 +780,85 @@ function savePlan() {
   document.getElementById('save-name').value = document.getElementById('plan-name').value;
   document.getElementById('save-form').submit();
 }
+
+{% if plan.group_id %}
+const GROUP_ID = {{ plan.group.pk }};
+let chatPollTimer = null;
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function scrollChatToBottom() {
+  const log = document.getElementById('plan-chat-log');
+  if (log) log.scrollTop = log.scrollHeight;
+}
+
+function renderChatMessages(messages) {
+  const log = document.getElementById('plan-chat-log');
+  if (!log) return;
+  if (messages.length === 0) {
+    log.innerHTML = '<div class="chat-empty">まだメッセージがありません</div>';
+    return;
+  }
+  log.innerHTML = messages.map(function(m) {
+    return '<div class="chat-message' + (m.is_mine ? ' mine' : '') + '">' +
+      '<div class="chat-message-meta"><strong>' + escapeHtml(m.username) + '</strong><span>' + escapeHtml(m.created_at) + '</span></div>' +
+      '<div class="chat-message-text">' + escapeHtml(m.text) + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function fetchChatMessages() {
+  const res = await fetch('/api/groups/' + GROUP_ID + '/messages/');
+  const data = await res.json();
+  renderChatMessages(data.messages);
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  const res = await fetch('/api/groups/' + GROUP_ID + '/messages/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({text: text})
+  });
+  const data = await res.json();
+  renderChatMessages(data.messages);
+  scrollChatToBottom();
+}
+
+function startChatPolling() {
+  if (chatPollTimer) return;
+  chatPollTimer = setInterval(fetchChatMessages, 8000);
+}
+
+function stopChatPolling() {
+  clearInterval(chatPollTimer);
+  chatPollTimer = null;
+}
+
+function toggleChat() {
+  const panel = document.getElementById('chat-panel');
+  const isOpen = panel.classList.toggle('open');
+  sessionStorage.setItem('chatOpen-' + GROUP_ID, isOpen ? '1' : '0');
+  if (isOpen) {
+    scrollChatToBottom();
+    startChatPolling();
+  } else {
+    stopChatPolling();
+  }
+}
+
+if (sessionStorage.getItem('chatOpen-' + GROUP_ID) === '1') {
+  document.getElementById('chat-panel').classList.add('open');
+  scrollChatToBottom();
+  startChatPolling();
+}
+{% endif %}
 </script>
 {% endblock %}

@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
-from .models import TravelPlan, CardTemplate, ScheduleItem, Group, CardResponse
+from .models import TravelPlan, CardTemplate, ScheduleItem, Group, CardResponse, GroupMessage
 
 DEFAULT_CARDS = [
     ('起床', 'wake'),
@@ -149,10 +149,18 @@ def _assign_overlap_columns(items):
 
 
 def _get_editable_plan_or_404(pk, user):
-    """Fetch a plan the given user may edit its schedule for: the owner, or a member
-    of the group it's shared with. Renaming/deleting the plan is still owner-only."""
+    """Fetch a plan only if the user may edit its schedule (owner only)."""
     plan = get_object_or_404(TravelPlan, pk=pk)
     if not plan.can_edit(user):
+        raise Http404
+    return plan
+
+
+def _get_viewable_plan_or_404(pk, user):
+    """Fetch a plan the user may open and respond to: the owner, or a member of
+    the group it's shared with. They cannot edit the schedule itself."""
+    plan = get_object_or_404(TravelPlan, pk=pk)
+    if not plan.can_view(user):
         raise Http404
     return plan
 
@@ -261,7 +269,14 @@ def plan_new(request):
         name = request.POST.get('name', '無題のプラン')
         start = request.POST.get('start_date') or None
         end = request.POST.get('end_date') or None
-        plan = TravelPlan.objects.create(user=request.user, name=name, start_date=start, end_date=end)
+        try:
+            participant_count = max(1, int(request.POST.get('participant_count', 1)))
+        except (TypeError, ValueError):
+            participant_count = 1
+        plan = TravelPlan.objects.create(
+            user=request.user, name=name, start_date=start, end_date=end,
+            participant_count=participant_count,
+        )
         return redirect('plan_edit', pk=plan.pk)
     return render(request, 'travel/plan_new.html')
 
@@ -303,7 +318,7 @@ def _build_days_data(plan, user=None):
 
 @login_required
 def plan_edit(request, pk):
-    plan = _get_editable_plan_or_404(pk, request.user)
+    plan = _get_viewable_plan_or_404(pk, request.user)
     is_owner = plan.user_id == request.user.id
     if request.method == 'POST':
         if is_owner:
@@ -316,6 +331,7 @@ def plan_edit(request, pk):
     days, days_data = _build_days_data(plan, user=request.user)
     share_url = request.build_absolute_uri(reverse('plan_share', args=[plan.share_token]))
     my_groups = Group.objects.filter(owner=request.user) if is_owner else Group.objects.none()
+    chat_messages = plan.group.messages.select_related('user') if plan.group_id else None
     return render(request, 'travel/plan_edit.html', {
         'plan': plan,
         'templates': templates,
@@ -330,6 +346,7 @@ def plan_edit(request, pk):
         'share_url': share_url,
         'is_owner': is_owner,
         'my_groups': my_groups,
+        'chat_messages': chat_messages,
     })
 
 
@@ -378,6 +395,28 @@ def plan_set_group(request, pk):
 
 
 @login_required
+@require_POST
+def plan_set_participants(request, pk):
+    plan = get_object_or_404(TravelPlan, pk=pk, user=request.user)
+    try:
+        plan.participant_count = max(1, int(request.POST.get('participant_count', 1)))
+    except (TypeError, ValueError):
+        pass
+    else:
+        plan.save(update_fields=['participant_count'])
+    return redirect('plan_edit', pk=plan.pk)
+
+
+@login_required
+@require_POST
+def plan_toggle_warikan(request, pk):
+    plan = get_object_or_404(TravelPlan, pk=pk, user=request.user)
+    plan.warikan_enabled = not plan.warikan_enabled
+    plan.save(update_fields=['warikan_enabled'])
+    return redirect('plan_edit', pk=plan.pk)
+
+
+@login_required
 def group_list(request):
     owned_groups = Group.objects.filter(owner=request.user)
     joined_groups = Group.objects.filter(members=request.user).exclude(owner=request.user)
@@ -420,6 +459,44 @@ def group_detail(request, pk):
         'is_owner': is_owner,
         'error': error,
         'shared_plans': group.plans.all(),
+        'chat_messages': group.messages.select_related('user'),
+    })
+
+
+@login_required
+@require_POST
+def group_send_message(request, pk):
+    group = get_object_or_404(Group, pk=pk)
+    if not group.is_member(request.user):
+        raise Http404
+    text = request.POST.get('text', '').strip()
+    if text:
+        GroupMessage.objects.create(group=group, user=request.user, text=text)
+    return redirect('group_detail', pk=group.pk)
+
+
+@login_required
+def api_group_messages(request, group_pk):
+    group = get_object_or_404(Group, pk=group_pk)
+    if not group.is_member(request.user):
+        raise Http404
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        text = data.get('text', '').strip()
+        if text:
+            GroupMessage.objects.create(group=group, user=request.user, text=text)
+    messages = group.messages.select_related('user')
+    return JsonResponse({
+        'messages': [
+            {
+                'id': m.pk,
+                'username': m.user.username,
+                'text': m.text,
+                'created_at': m.created_at.strftime('%m/%d %H:%M'),
+                'is_mine': m.user_id == request.user.id,
+            }
+            for m in messages
+        ]
     })
 
 
@@ -461,6 +538,16 @@ def notifications_view(request):
 
 
 @login_required
+@require_POST
+def notification_read(request, pk):
+    resp = get_object_or_404(CardResponse, pk=pk, status='rejected', item__plan__user=request.user)
+    if not resp.is_read:
+        resp.is_read = True
+        resp.save(update_fields=['is_read'])
+    return redirect('plan_edit', pk=resp.item.plan_id)
+
+
+@login_required
 def card_templates(request):
     if request.method == 'POST':
         name = request.POST.get('name', '').strip()
@@ -493,10 +580,13 @@ def api_add_item(request, plan_pk):
     duration_minutes = _snap_duration(data.get('duration_minutes'))
     memo = data.get('memo', '')
     alarm_enabled = bool(data.get('alarm_enabled')) and tpl.card_type == 'wake'
+    from_location = data.get('from_location', '').strip() if tpl.card_type == 'move' else ''
+    to_location = data.get('to_location', '').strip() if tpl.card_type == 'move' else ''
     item = ScheduleItem.objects.create(
         plan=plan, template=tpl, name=tpl.name, card_type=tpl.card_type,
         day_number=day, order=order, start_time=start_time,
-        duration_minutes=duration_minutes, memo=memo, alarm_enabled=alarm_enabled
+        duration_minutes=duration_minutes, memo=memo, alarm_enabled=alarm_enabled,
+        from_location=from_location, to_location=to_location,
     )
     return JsonResponse({
         'id': item.pk, 'name': item.name, 'card_type': item.card_type, 'day': day,
@@ -504,6 +594,8 @@ def api_add_item(request, plan_pk):
         'duration_minutes': item.duration_minutes,
         'memo': item.memo,
         'alarm_enabled': item.alarm_enabled,
+        'from_location': item.from_location,
+        'to_location': item.to_location,
     })
 
 
@@ -519,16 +611,25 @@ def api_update_time(request, plan_pk, item_pk):
         item.duration_minutes = int(data['duration_minutes'])
     if 'memo' in data:
         item.memo = data['memo']
+    if 'from_location' in data and item.card_type == 'move':
+        item.from_location = data['from_location'].strip()
+    if 'to_location' in data and item.card_type == 'move':
+        item.to_location = data['to_location'].strip()
     if 'alarm_enabled' in data:
         item.alarm_enabled = bool(data['alarm_enabled']) and item.card_type == 'wake'
     if 'approval_enabled' in data and plan.user_id == request.user.id:
         item.approval_enabled = bool(data['approval_enabled'])
+    if 'cost' in data:
+        try:
+            item.cost = max(0, int(data['cost'] or 0))
+        except (TypeError, ValueError):
+            pass
     if 'day' in data and int(data['day']) != item.day_number:
         item.day_number = int(data['day'])
         item.order = plan.schedule_items.filter(day_number=item.day_number).count()
     item.save(update_fields=[
-        'start_time', 'duration_minutes', 'memo', 'alarm_enabled',
-        'approval_enabled', 'day_number', 'order',
+        'start_time', 'duration_minutes', 'memo', 'from_location', 'to_location',
+        'alarm_enabled', 'approval_enabled', 'cost', 'day_number', 'order',
     ])
     return JsonResponse({
         'id': item.pk,
@@ -537,6 +638,10 @@ def api_update_time(request, plan_pk, item_pk):
         'alarm_enabled': item.alarm_enabled,
         'approval_enabled': item.approval_enabled,
         'memo': item.memo,
+        'from_location': item.from_location,
+        'to_location': item.to_location,
+        'cost': item.cost,
+        'cost_per_person': item.cost_per_person,
         'day': item.day_number,
     })
 
@@ -565,17 +670,17 @@ def api_reorder(request, plan_pk):
 @login_required
 @require_POST
 def api_set_response(request, plan_pk, item_pk):
-    plan = _get_editable_plan_or_404(plan_pk, request.user)
+    plan = _get_viewable_plan_or_404(plan_pk, request.user)
     item = get_object_or_404(ScheduleItem, pk=item_pk, plan=plan, approval_enabled=True)
+    existing = CardResponse.objects.filter(item=item, user=request.user).first()
+    if existing:
+        # Once a person has responded, their choice is locked in and can't be changed.
+        return JsonResponse({'error': 'すでに回答済みです', 'my_response': existing.status}, status=400)
     data = json.loads(request.body)
     status = data.get('status')
     if status in ('approved', 'rejected'):
         comment = data.get('comment', '').strip() if status == 'rejected' else ''
-        CardResponse.objects.update_or_create(
-            item=item, user=request.user, defaults={'status': status, 'comment': comment}
-        )
-    else:
-        CardResponse.objects.filter(item=item, user=request.user).delete()
+        CardResponse.objects.create(item=item, user=request.user, status=status, comment=comment)
     result = {
         'id': item.pk,
         'my_response': status if status in ('approved', 'rejected') else None,
