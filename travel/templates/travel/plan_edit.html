@@ -140,11 +140,12 @@
   {% elif plan.group %}
   <span style="font-size:13px;color:#888">👥 {{ plan.group.name }}</span>
   {% endif %}
-  {% if is_owner %}
-  <form method="post" action="/plan/{{ plan.pk }}/like/" style="margin:0">
+  <form method="post" action="/plan/{{ plan.pk }}/like/" style="margin:0;display:flex;align-items:center;gap:3px">
     {% csrf_token %}
-    <button type="submit" title="{% if plan.is_liked %}いいねを取り消す{% else %}いいね{% endif %}" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1;padding:4px">{% if plan.is_liked %}❤️{% else %}🤍{% endif %}</button>
+    <button type="submit" title="{% if plan.my_like %}いいねを取り消す{% else %}いいね{% endif %}" style="background:none;border:none;cursor:pointer;font-size:20px;line-height:1;padding:4px">{% if plan.my_like %}❤️{% else %}🤍{% endif %}</button>
+    {% if plan.like_count %}<span style="font-size:13px;color:#888">{{ plan.like_count }}</span>{% endif %}
   </form>
+  {% if is_owner %}
   <form method="post" action="/plan/{{ plan.pk }}/toggle-warikan/" style="margin:0">
     {% csrf_token %}
     <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:#666;cursor:pointer;white-space:nowrap">
@@ -153,6 +154,7 @@
     </label>
   </form>
   {% endif %}
+  <a href="/plan/{{ plan.pk }}/map/" class="btn btn-secondary btn-sm">🗺 地図</a>
   <button class="btn btn-secondary btn-sm" onclick="openShareModal()">🔗 共有</button>
   <button class="btn btn-primary btn-sm" onclick="savePlan()">保存して戻る</button>
 </div>

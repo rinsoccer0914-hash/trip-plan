@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
-from .models import TravelPlan, CardTemplate, ScheduleItem, Group, CardResponse, GroupMessage
+from .models import TravelPlan, CardTemplate, ScheduleItem, Group, CardResponse, GroupMessage, PlanLike
 
 DEFAULT_CARDS = [
     ('起床', 'wake'),
@@ -257,9 +257,12 @@ def logout_view(request):
 
 @login_required
 def top_view(request):
-    plans = TravelPlan.objects.filter(
+    plans = list(TravelPlan.objects.filter(
         Q(user=request.user) | Q(group__owner=request.user) | Q(group__members=request.user)
-    ).distinct()
+    ).distinct())
+    for plan in plans:
+        plan.my_like = plan.is_liked_by(request.user)
+        plan.like_count = plan.likes.count()
     return render(request, 'travel/top.html', {'plans': plans})
 
 
@@ -332,6 +335,8 @@ def plan_edit(request, pk):
     share_url = request.build_absolute_uri(reverse('plan_share', args=[plan.share_token]))
     my_groups = Group.objects.filter(owner=request.user) if is_owner else Group.objects.none()
     chat_messages = plan.group.messages.select_related('user') if plan.group_id else None
+    plan.my_like = plan.is_liked_by(request.user)
+    plan.like_count = plan.likes.count()
     return render(request, 'travel/plan_edit.html', {
         'plan': plan,
         'templates': templates,
@@ -348,6 +353,27 @@ def plan_edit(request, pk):
         'my_groups': my_groups,
         'chat_messages': chat_messages,
     })
+
+
+@login_required
+def plan_map(request, pk):
+    plan = _get_viewable_plan_or_404(pk, request.user)
+    seen = set()
+    locations = []
+    for item in plan.schedule_items.order_by('day_number', 'order'):
+        candidates = []
+        if item.card_type == 'move':
+            if item.from_location:
+                candidates.append(item.from_location.strip())
+            if item.to_location:
+                candidates.append(item.to_location.strip())
+        elif item.card_type in ('see', 'stay'):
+            candidates.append(item.name.strip())
+        for label in candidates:
+            if label and label not in seen:
+                seen.add(label)
+                locations.append({'label': label, 'day': item.day_number})
+    return render(request, 'travel/plan_map.html', {'plan': plan, 'locations': locations})
 
 
 def plan_share(request, token):
@@ -375,9 +401,12 @@ def plan_delete(request, pk):
 @login_required
 @require_POST
 def plan_like_toggle(request, pk):
-    plan = get_object_or_404(TravelPlan, pk=pk, user=request.user)
-    plan.is_liked = not plan.is_liked
-    plan.save(update_fields=['is_liked'])
+    plan = _get_viewable_plan_or_404(pk, request.user)
+    like = PlanLike.objects.filter(plan=plan, user=request.user).first()
+    if like:
+        like.delete()
+    else:
+        PlanLike.objects.create(plan=plan, user=request.user)
     return redirect(request.META.get('HTTP_REFERER') or 'top')
 
 
@@ -528,13 +557,29 @@ def group_delete(request, pk):
 
 @login_required
 def notifications_view(request):
-    items = (
+    rejections = (
         CardResponse.objects.filter(status='rejected', item__plan__user=request.user)
         .exclude(comment='')
         .select_related('item', 'item__plan', 'user')
-        .order_by('-updated_at')
     )
-    return render(request, 'travel/notifications.html', {'notifications': items})
+    likes = (
+        PlanLike.objects.filter(plan__user=request.user)
+        .exclude(user=request.user)
+        .select_related('plan', 'user')
+    )
+    entries = []
+    for r in rejections:
+        entries.append({
+            'kind': 'reject', 'pk': r.pk, 'is_read': r.is_read, 'timestamp': r.updated_at,
+            'user': r.user, 'plan': r.item.plan, 'item': r.item, 'comment': r.comment,
+        })
+    for like in likes:
+        entries.append({
+            'kind': 'like', 'pk': like.pk, 'is_read': like.is_read, 'timestamp': like.created_at,
+            'user': like.user, 'plan': like.plan,
+        })
+    entries.sort(key=lambda e: e['timestamp'], reverse=True)
+    return render(request, 'travel/notifications.html', {'notifications': entries})
 
 
 @login_required
@@ -545,6 +590,16 @@ def notification_read(request, pk):
         resp.is_read = True
         resp.save(update_fields=['is_read'])
     return redirect('plan_edit', pk=resp.item.plan_id)
+
+
+@login_required
+@require_POST
+def plan_like_read(request, pk):
+    like = get_object_or_404(PlanLike, pk=pk, plan__user=request.user)
+    if not like.is_read:
+        like.is_read = True
+        like.save(update_fields=['is_read'])
+    return redirect('plan_edit', pk=like.plan_id)
 
 
 @login_required

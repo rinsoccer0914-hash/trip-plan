@@ -2,9 +2,13 @@
 {% block title %}ログイン - TravelPlan{% endblock %}
 {% block extra_css %}
 <style>
-.hero{background:linear-gradient(135deg,#0ea5e9 0%,#2563eb 55%,#059669 100%);color:#fff;padding:96px 24px 80px;text-align:center;position:relative;overflow:hidden}
-.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 20% 20%,rgba(255,255,255,.15),transparent 45%),radial-gradient(circle at 80% 70%,rgba(255,255,255,.12),transparent 40%)}
-.hero-inner{position:relative;max-width:720px;margin:0 auto}
+.hero{background:linear-gradient(160deg,#0e7490 0%,#06b6d4 22%,#2dd4bf 44%,#fcd34d 74%,#fb923c 100%);color:#fff;padding:96px 24px 96px;text-align:center;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 82% 14%,rgba(255,255,255,.55),transparent 16%),radial-gradient(circle at 82% 14%,rgba(255,241,178,.35),transparent 30%),radial-gradient(circle at 15% 25%,rgba(255,255,255,.12),transparent 40%)}
+.hero::after{content:"";position:absolute;left:-10%;right:-10%;bottom:-42px;height:90px;background:#fff;border-radius:50%}
+.hero-palm{position:absolute;font-size:80px;opacity:.5;line-height:1;pointer-events:none;text-shadow:0 8px 14px rgba(0,0,0,.15)}
+.hero-palm.left{left:-10px;bottom:10px;transform:scaleX(-1)}
+.hero-palm.right{right:-10px;bottom:0}
+.hero-inner{position:relative;max-width:720px;margin:0 auto;z-index:1}
 .hero-logo{font-size:20px;font-weight:700;letter-spacing:.02em;opacity:.9;margin-bottom:20px}
 .hero-title{font-size:clamp(28px,5vw,44px);font-weight:700;line-height:1.35;margin-bottom:16px}
 .hero-sub{font-size:15px;color:rgba(255,255,255,.9);margin-bottom:32px;line-height:1.7}
@@ -52,6 +56,8 @@
 {% endblock %}
 {% block content %}
 <div class="hero">
+  <div class="hero-palm left">🌴</div>
+  <div class="hero-palm right">🌴</div>
   <div class="hero-inner">
     <div class="hero-logo">✈ TravelPlan</div>
     <div class="hero-title">旅行プランの見える化</div>

@@ -1,0 +1,85 @@
+{% extends 'travel/base.html' %}
+{% block title %}{{ plan.name }} - 地図 - TravelPlan{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+.map-top-bar{background:#fff;border-bottom:1px solid #e5e5e0;padding:10px 20px;display:flex;align-items:center;gap:12px}
+.map-title{flex:1;font-size:16px;font-weight:600;color:#1a1a1a}
+#map{height:calc(100vh - 56px - 53px)}
+.map-empty{display:flex;align-items:center;justify-content:center;height:calc(100vh - 56px - 53px);color:#aaa;font-size:14px;text-align:center;padding:20px}
+.map-status{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:13px;padding:8px 16px;border-radius:20px;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="map-top-bar">
+  <a href="/plan/{{ plan.pk }}/edit/" class="btn btn-secondary btn-sm">← プランに戻る</a>
+  <div class="map-title">🗺 {{ plan.name }} の行先マップ</div>
+</div>
+{{ locations|json_script:"locations-data" }}
+{% if locations %}
+<div id="map"></div>
+<div class="map-status" id="map-status">📍 場所を検索しています…</div>
+{% else %}
+<div class="map-empty">まだ地図に表示できる行先がありません。<br>移動カードの出発地・到着地や、観光・宿泊カードの名前が地図に表示されます。</div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const LOCATIONS = JSON.parse(document.getElementById('locations-data').textContent);
+const mapEl = document.getElementById('map');
+
+if (mapEl && LOCATIONS.length) {
+  const map = L.map('map').setView([36.2048, 138.2529], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  const bounds = [];
+  const statusEl = document.getElementById('map-status');
+  let doneCount = 0;
+  let failCount = 0;
+
+  async function geocode(label) {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(label);
+    const res = await fetch(url, {headers: {'Accept-Language': 'ja'}});
+    const data = await res.json();
+    return data.length ? {lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon)} : null;
+  }
+
+  async function run() {
+    for (let i = 0; i < LOCATIONS.length; i++) {
+      const loc = LOCATIONS[i];
+      statusEl.textContent = '📍 場所を検索しています… (' + (i + 1) + '/' + LOCATIONS.length + ') ' + loc.label;
+      try {
+        const point = await geocode(loc.label);
+        if (point) {
+          const marker = L.marker([point.lat, point.lon]).addTo(map);
+          marker.bindPopup('<strong>' + loc.label + '</strong><br>' + loc.day + '日目');
+          bounds.push([point.lat, point.lon]);
+          doneCount++;
+        } else {
+          failCount++;
+        }
+      } catch (e) {
+        failCount++;
+      }
+      if (i < LOCATIONS.length - 1) {
+        await new Promise(function(resolve) { setTimeout(resolve, 1100); });
+      }
+    }
+    if (bounds.length) {
+      map.fitBounds(bounds, {padding: [40, 40]});
+    }
+    if (failCount === 0) {
+      statusEl.remove();
+    } else {
+      statusEl.textContent = '📍 ' + doneCount + '件表示（' + failCount + '件は見つかりませんでした）';
+      setTimeout(function() { statusEl.remove(); }, 4000);
+    }
+  }
+  run();
+}
+</script>
+{% endblock %}

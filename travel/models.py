@@ -41,7 +41,6 @@ class TravelPlan(models.Model):
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
     share_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    is_liked = models.BooleanField(default=False)
     group = models.ForeignKey(Group, on_delete=models.SET_NULL, null=True, blank=True, related_name='plans')
     participant_count = models.PositiveIntegerField(default=1)
     warikan_enabled = models.BooleanField(default=False)
@@ -81,6 +80,9 @@ class TravelPlan(models.Model):
         if self.user_id == user.id:
             return True
         return bool(self.group_id and self.group.is_member(user))
+
+    def is_liked_by(self, user):
+        return self.likes.filter(user=user).exists()
 
 
 class CardTemplate(models.Model):
@@ -151,3 +153,16 @@ class CardResponse(models.Model):
 
     def __str__(self):
         return f"{self.user.username}: {self.get_status_display()} ({self.item.name})"
+
+
+class PlanLike(models.Model):
+    plan = models.ForeignKey(TravelPlan, on_delete=models.CASCADE, related_name='likes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('plan', 'user')
+
+    def __str__(self):
+        return f"{self.user.username} likes {self.plan.name}"
