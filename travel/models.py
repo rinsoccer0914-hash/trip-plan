@@ -3,6 +3,16 @@ from django.db import models
 from django.contrib.auth.models import User
 
 
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    # Deliberately coarse: town-level only (e.g. "東京都渋谷区渋谷"), never a full
+    # street address, since this gets baked into move cards other people can see.
+    home_address = models.CharField(max_length=200, blank=True, default='')
+
+    def __str__(self):
+        return f"{self.user.username} の住所"
+
+
 class Group(models.Model):
     name = models.CharField(max_length=100)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_groups')
@@ -89,10 +99,11 @@ class CardTemplate(models.Model):
     TYPE_CHOICES = [
         ('wake', '起床'),
         ('move', '移動'),
-        ('eat', '食事'),
+        ('eat', 'ご飯'),
         ('see', '観光'),
-        ('stay', '宿泊'),
-        ('free', 'フリー'),
+        ('stay', 'ホテル'),
+        ('other', 'その他'),
+        ('free', '予備'),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='card_templates')
     name = models.CharField(max_length=200)

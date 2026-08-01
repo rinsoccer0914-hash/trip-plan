@@ -12,7 +12,7 @@
     {% for plan in plans %}
     <div class="card" style="padding:20px;transition:border-color .15s;cursor:pointer" onclick="location.href='/plan/{{ plan.pk }}/edit/'">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px">
-        <div style="font-size:16px;font-weight:600">{{ plan.name }}</div>
+        <div style="font-size:16px;font-weight:600;text-align:center;flex:1">{{ plan.name }}</div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <span class="badge" style="background:#dbeafe;color:#1d4ed8;white-space:nowrap">{{ plan.day_count }}日間</span>
           <form method="post" action="/plan/{{ plan.pk }}/like/" onclick="event.stopPropagation()" style="margin:0;display:flex;align-items:center;gap:2px">

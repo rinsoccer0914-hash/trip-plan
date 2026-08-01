@@ -3,31 +3,47 @@ from datetime import datetime, time, timedelta
 from urllib.parse import urlencode
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
-from django.db.models import Q
+from django.db.models import Q, Case, When, Value, IntegerField
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
-from .models import TravelPlan, CardTemplate, ScheduleItem, Group, CardResponse, GroupMessage, PlanLike
+from .models import TravelPlan, CardTemplate, ScheduleItem, Group, CardResponse, GroupMessage, PlanLike, Profile
 
 DEFAULT_CARDS = [
-    ('起床', 'wake'),
-    ('車', 'move'),
-    ('電車', 'move'),
-    ('バス', 'move'),
-    ('飛行機', 'move'),
-    ('徒歩', 'move'),
-    ('自転車', 'move'),
-    ('朝食', 'eat'),
-    ('昼食', 'eat'),
-    ('夕食', 'eat'),
-    ('観光スポット', 'see'),
-    ('ホテルチェックイン', 'stay'),
-    ('ホテルチェックアウト', 'stay'),
+    ('起床・就寝', 'wake'),
+    ('移動', 'move'),
+    ('ご飯', 'eat'),
+    ('観光', 'see'),
+    ('ホテル', 'stay'),
+    ('その他', 'other'),
     ('予備時間', 'free'),
 ]
+
+# card_type -> subtype labels the add-modal offers as a dropdown; the chosen
+# label becomes the schedule item's name (overriding the template's own name).
+SUBTYPE_CHOICES = {
+    'wake': ['起床', '就寝'],
+    'move': ['車', '電車', 'バス', '飛行機', '徒歩', '自転車'],
+    'eat': ['朝食', '昼食', '夕食'],
+    'stay': ['チェックイン', 'チェックアウト'],
+}
+
+# Display order for card types in the card palette / management list.
+CARD_TYPE_ORDER = ['wake', 'move', 'eat', 'see', 'stay', 'free', 'other']
+
+
+def _ordered_templates(user):
+    order_case = Case(
+        *[When(card_type=t, then=Value(i)) for i, t in enumerate(CARD_TYPE_ORDER)],
+        default=Value(len(CARD_TYPE_ORDER)),
+        output_field=IntegerField(),
+    )
+    return CardTemplate.objects.filter(user=user).annotate(_type_order=order_case).order_by('is_default', '_type_order', 'name')
+
+WEEKDAY_JA = ['月', '火', '水', '木', '金', '土', '日']
 
 SLOT_MINUTES = 15
 SLOT_HEIGHT = 28  # px per 15-minute slot on the timeline
@@ -165,7 +181,15 @@ def _get_viewable_plan_or_404(pk, user):
     return plan
 
 
-RETIRED_DEFAULT_CARDS = ['電車・バス移動']
+RETIRED_DEFAULT_CARDS = [
+    '電車・バス移動',
+    '車', '電車', 'バス', '飛行機', '徒歩', '自転車',
+    '朝食', '昼食', '夕食', '夜ご飯',
+    '観光スポット',
+    'ホテルチェックイン', 'ホテルチェックアウト',
+    '予備',
+    '起床',
+]
 
 
 def ensure_defaults(user):
@@ -224,6 +248,9 @@ def login_view(request):
         if user:
             login(request, user)
             ensure_defaults(user)
+            profile, _ = Profile.objects.get_or_create(user=user)
+            if not profile.home_address:
+                return redirect('set_home_address')
             return redirect('top')
         error = 'ユーザー名またはパスワードが正しくありません'
     return render(request, 'travel/login.html', {
@@ -238,6 +265,7 @@ def register_view(request):
     if request.method == 'POST':
         username = request.POST.get('username', '')
         password = request.POST.get('password', '')
+        home_address = request.POST.get('home_address', '').strip()
         if User.objects.filter(username=username).exists():
             error = 'そのユーザー名はすでに使われています'
         elif len(password) < 4:
@@ -246,6 +274,9 @@ def register_view(request):
             user = User.objects.create_user(username=username, password=password)
             login(request, user)
             ensure_defaults(user)
+            Profile.objects.create(user=user, home_address=home_address)
+            if not home_address:
+                return redirect('set_home_address')
             return redirect('top')
     return render(request, 'travel/register.html', {'error': error})
 
@@ -253,6 +284,16 @@ def register_view(request):
 def logout_view(request):
     logout(request)
     return redirect('login')
+
+
+@login_required
+def set_home_address_view(request):
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+    if request.method == 'POST':
+        profile.home_address = request.POST.get('home_address', '').strip()
+        profile.save(update_fields=['home_address'])
+        return redirect('top')
+    return render(request, 'travel/set_address.html', {'profile': profile})
 
 
 @login_required
@@ -315,7 +356,9 @@ def _build_days_data(plan, user=None):
                         r for r in item_responses if r.status == 'rejected' and r.comment
                     ]
         _assign_overlap_columns(items)
-        days_data.append({'number': d, 'items': items})
+        date = plan.start_date + timedelta(days=d - 1) if plan.start_date else None
+        date_str = f'{date.month}月{date.day}日({WEEKDAY_JA[date.weekday()]})' if date else None
+        days_data.append({'number': d, 'items': items, 'date_str': date_str})
     return days, days_data
 
 
@@ -330,7 +373,8 @@ def plan_edit(request, pk):
                 plan.name = new_name
                 plan.save(update_fields=["name"])
         return redirect('top')
-    templates = CardTemplate.objects.filter(user=request.user)
+    ensure_defaults(request.user)
+    templates = _ordered_templates(request.user)
     days, days_data = _build_days_data(plan, user=request.user)
     share_url = request.build_absolute_uri(reverse('plan_share', args=[plan.share_token]))
     my_groups = Group.objects.filter(owner=request.user) if is_owner else Group.objects.none()
@@ -352,14 +396,31 @@ def plan_edit(request, pk):
         'is_owner': is_owner,
         'my_groups': my_groups,
         'chat_messages': chat_messages,
+        'subtype_choices_json': json.dumps(SUBTYPE_CHOICES, ensure_ascii=False),
+        'home_address_json': json.dumps(getattr(getattr(request.user, 'profile', None), 'home_address', '') or ''),
     })
+
+
+HOME_LABELS = ('自宅', '家')
 
 
 @login_required
 def plan_map(request, pk):
     plan = _get_viewable_plan_or_404(pk, request.user)
+    owner_profile = getattr(plan.user, 'profile', None)
+    home_address = owner_profile.home_address if owner_profile else ''
+
+    def geocode_query(label):
+        # "自宅"/"家" are never real place names Nominatim can resolve; swap in
+        # the plan owner's registered address for the lookup, but keep showing
+        # the "自宅" label on the map (not the raw address) for privacy.
+        if label in HOME_LABELS and home_address:
+            return home_address
+        return label
+
     seen = set()
     locations = []
+    segments = []
     for item in plan.schedule_items.order_by('day_number', 'order'):
         candidates = []
         if item.card_type == 'move':
@@ -367,13 +428,21 @@ def plan_map(request, pk):
                 candidates.append(item.from_location.strip())
             if item.to_location:
                 candidates.append(item.to_location.strip())
+            if item.from_location and item.to_location:
+                segments.append({
+                    'from': item.from_location.strip(),
+                    'to': item.to_location.strip(),
+                    'mode': item.name,
+                })
         elif item.card_type in ('see', 'stay'):
             candidates.append(item.name.strip())
         for label in candidates:
             if label and label not in seen:
                 seen.add(label)
-                locations.append({'label': label, 'day': item.day_number})
-    return render(request, 'travel/plan_map.html', {'plan': plan, 'locations': locations})
+                locations.append({'label': label, 'day': item.day_number, 'query': geocode_query(label)})
+    return render(request, 'travel/plan_map.html', {
+        'plan': plan, 'locations': locations, 'segments': segments,
+    })
 
 
 def plan_share(request, token):
@@ -610,7 +679,8 @@ def card_templates(request):
         if name:
             CardTemplate.objects.create(user=request.user, name=name, card_type=ctype)
         return redirect('card_templates')
-    templates = CardTemplate.objects.filter(user=request.user)
+    ensure_defaults(request.user)
+    templates = _ordered_templates(request.user)
     return render(request, 'travel/card_templates.html', {'templates': templates})
 
 
@@ -637,8 +707,10 @@ def api_add_item(request, plan_pk):
     alarm_enabled = bool(data.get('alarm_enabled')) and tpl.card_type == 'wake'
     from_location = data.get('from_location', '').strip() if tpl.card_type == 'move' else ''
     to_location = data.get('to_location', '').strip() if tpl.card_type == 'move' else ''
+    subtype = data.get('subtype', '').strip()
+    name = subtype if subtype in SUBTYPE_CHOICES.get(tpl.card_type, []) else tpl.name
     item = ScheduleItem.objects.create(
-        plan=plan, template=tpl, name=tpl.name, card_type=tpl.card_type,
+        plan=plan, template=tpl, name=name, card_type=tpl.card_type,
         day_number=day, order=order, start_time=start_time,
         duration_minutes=duration_minutes, memo=memo, alarm_enabled=alarm_enabled,
         from_location=from_location, to_location=to_location,

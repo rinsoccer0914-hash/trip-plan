@@ -16,6 +16,7 @@
   <div class="map-title">🗺 {{ plan.name }} の行先マップ</div>
 </div>
 {{ locations|json_script:"locations-data" }}
+{{ segments|json_script:"segments-data" }}
 {% if locations %}
 <div id="map"></div>
 <div class="map-status" id="map-status">📍 場所を検索しています…</div>
@@ -27,25 +28,77 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 const LOCATIONS = JSON.parse(document.getElementById('locations-data').textContent);
+const SEGMENTS = JSON.parse(document.getElementById('segments-data').textContent);
 const mapEl = document.getElementById('map');
 
+// Car/foot/bike routes follow actual roads (via OSRM); train/bus/plane have no
+// public routing API here, so they fall back to a straight line, styled per mode.
+const MODE_STYLE = {
+  '車': {color: '#db2777', profile: 'driving'},
+  '徒歩': {color: '#10b981', profile: 'walking'},
+  '自転車': {color: '#8b5cf6', profile: 'cycling'},
+  '電車': {color: '#2563eb', dash: '2 8'},
+  'バス': {color: '#0ea5e9', dash: '2 12'},
+  '飛行機': {color: '#ef4444', dash: '10 6'},
+};
+const DEFAULT_MODE_STYLE = {color: '#9ca3af', dash: '6 8'};
+
 if (mapEl && LOCATIONS.length) {
-  const map = L.map('map').setView([36.2048, 138.2529], 5);
+  const JAPAN_BOUNDS = [[20.0, 122.0], [46.5, 154.5]];
+  const map = L.map('map', {
+    maxBounds: JAPAN_BOUNDS,
+    maxBoundsViscosity: 1.0,
+    minZoom: 5
+  }).setView([36.2048, 138.2529], 5);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19
   }).addTo(map);
 
   const bounds = [];
+  const points = {};
   const statusEl = document.getElementById('map-status');
   let doneCount = 0;
   let failCount = 0;
 
+  function sleep(ms) {
+    return new Promise(function(resolve) { setTimeout(resolve, ms); });
+  }
+
   async function geocode(label) {
-    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(label);
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&q=' + encodeURIComponent(label);
     const res = await fetch(url, {headers: {'Accept-Language': 'ja'}});
     const data = await res.json();
     return data.length ? {lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon)} : null;
+  }
+
+  async function fetchRoadRoute(profile, from, to) {
+    const url = 'https://router.project-osrm.org/route/v1/' + profile + '/'
+      + from.lon + ',' + from.lat + ';' + to.lon + ',' + to.lat + '?overview=full&geometries=geojson';
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.code !== 'Ok' || !data.routes || !data.routes.length) return null;
+    return data.routes[0].geometry.coordinates.map(function(c) { return [c[1], c[0]]; });
+  }
+
+  async function drawSegments() {
+    for (const seg of SEGMENTS) {
+      const from = points[seg.from];
+      const to = points[seg.to];
+      if (!from || !to) continue;
+      const style = MODE_STYLE[seg.mode] || DEFAULT_MODE_STYLE;
+      let latlngs = [[from.lat, from.lon], [to.lat, to.lon]];
+      if (style.profile) {
+        try {
+          const routed = await fetchRoadRoute(style.profile, from, to);
+          if (routed && routed.length) latlngs = routed;
+        } catch (e) { /* fall back to the straight line already set above */ }
+        await sleep(300);
+      }
+      L.polyline(latlngs, {color: style.color, weight: 4, opacity: 0.85, dashArray: style.dash || null})
+        .addTo(map)
+        .bindPopup((seg.mode || '移動') + '：' + seg.from + ' → ' + seg.to);
+    }
   }
 
   async function run() {
@@ -53,8 +106,9 @@ if (mapEl && LOCATIONS.length) {
       const loc = LOCATIONS[i];
       statusEl.textContent = '📍 場所を検索しています… (' + (i + 1) + '/' + LOCATIONS.length + ') ' + loc.label;
       try {
-        const point = await geocode(loc.label);
+        const point = await geocode(loc.query || loc.label);
         if (point) {
+          points[loc.label] = point;
           const marker = L.marker([point.lat, point.lon]).addTo(map);
           marker.bindPopup('<strong>' + loc.label + '</strong><br>' + loc.day + '日目');
           bounds.push([point.lat, point.lon]);
@@ -66,11 +120,11 @@ if (mapEl && LOCATIONS.length) {
         failCount++;
       }
       if (i < LOCATIONS.length - 1) {
-        await new Promise(function(resolve) { setTimeout(resolve, 1100); });
+        await sleep(1100);
       }
     }
     if (bounds.length) {
-      map.fitBounds(bounds, {padding: [40, 40]});
+      map.fitBounds(bounds, {padding: [40, 40], maxZoom: 15});
     }
     if (failCount === 0) {
       statusEl.remove();
@@ -78,6 +132,7 @@ if (mapEl && LOCATIONS.length) {
       statusEl.textContent = '📍 ' + doneCount + '件表示（' + failCount + '件は見つかりませんでした）';
       setTimeout(function() { statusEl.remove(); }, 4000);
     }
+    await drawSegments();
   }
   run();
 }

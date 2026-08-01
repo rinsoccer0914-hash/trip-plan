@@ -1,0 +1,24 @@
+{% extends 'travel/base.html' %}
+{% block title %}自宅の住所 - TravelPlan{% endblock %}
+{% block content %}
+<div style="min-height:calc(100vh - 56px);display:flex;align-items:center;justify-content:center;padding:40px 16px">
+  <div style="width:100%;max-width:380px">
+    <div class="card">
+      <h2 style="font-size:18px;font-weight:600;margin-bottom:8px">🏠 自宅の住所を登録</h2>
+      <p style="font-size:13px;color:#666;margin-bottom:20px">移動カードの出発地・到着地に自宅の住所をすぐ入力できるようになります。町名までで大丈夫です。</p>
+      <form method="post">
+        {% csrf_token %}
+        <div class="form-group">
+          <label>自宅の住所（町名まで）</label>
+          <input type="text" name="home_address" placeholder="例：東京都渋谷区渋谷" value="{{ profile.home_address }}" autofocus>
+          <div style="font-size:12px;color:#999;margin-top:4px">番地・建物名などの詳しい住所は入力しないでください。</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <a href="/" class="btn btn-secondary" style="flex:1;justify-content:center">あとで設定する</a>
+          <button type="submit" class="btn btn-primary" style="flex:1;justify-content:center">保存する</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -37,6 +37,7 @@ a:hover{text-decoration:underline}
 .badge-eat{background:#fef3c7;color:#92400e}
 .badge-see{background:#d1fae5;color:#065f46}
 .badge-stay{background:#ede9fe;color:#4c1d95}
+.badge-other{background:#e0f2fe;color:#075985}
 .badge-free{background:#f3f4f6;color:#374151}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
 .dot-wake{background:#fbbf24}
@@ -44,6 +45,7 @@ a:hover{text-decoration:underline}
 .dot-eat{background:#f59e0b}
 .dot-see{background:#10b981}
 .dot-stay{background:#8b5cf6}
+.dot-other{background:#0ea5e9}
 .dot-free{background:#9ca3af}
 .nav-notif{position:relative;font-size:16px;padding:6px 10px;border-radius:6px}
 .nav-notif:hover{background:#f0f0ec}
@@ -57,9 +59,10 @@ a:hover{text-decoration:underline}
   <div class="nav-logo">✈ <span>Travel</span>Plan</div>
   <div class="nav-spacer"></div>
   <a class="nav-link" href="/">マイプラン</a>
-  <a class="nav-link" href="/cards/">予定カード</a>
+  <a class="nav-link" href="/cards/">新しいカードの作成</a>
   <a class="nav-link" href="/groups/">グループ</a>
   <a class="nav-notif" href="/notifications/" title="通知">🔔{% if unread_notification_count %}<span class="nav-notif-badge">{{ unread_notification_count }}</span>{% endif %}</a>
+  <a class="nav-notif" href="/profile/address/" title="自宅の住所を設定">🏠</a>
   <span class="nav-user">{{ user.username }}</span>
   <form method="post" action="/logout/" style="margin:0"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
     <button type="submit" class="btn btn-secondary btn-sm">ログアウト</button>
