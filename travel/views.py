@@ -10,6 +10,7 @@ from django.contrib.auth.models import User
 from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.cache import never_cache
 from .models import TravelPlan, CardTemplate, ScheduleItem, Group, CardResponse, GroupMessage, PlanLike, Profile
 
 DEFAULT_CARDS = [
@@ -248,9 +249,7 @@ def login_view(request):
         if user:
             login(request, user)
             ensure_defaults(user)
-            profile, _ = Profile.objects.get_or_create(user=user)
-            if not profile.home_address:
-                return redirect('set_home_address')
+            Profile.objects.get_or_create(user=user)
             return redirect('top')
         error = 'ユーザー名またはパスワードが正しくありません'
     return render(request, 'travel/login.html', {
@@ -275,8 +274,6 @@ def register_view(request):
             login(request, user)
             ensure_defaults(user)
             Profile.objects.create(user=user, home_address=home_address)
-            if not home_address:
-                return redirect('set_home_address')
             return redirect('top')
     return render(request, 'travel/register.html', {'error': error})
 
@@ -304,6 +301,7 @@ def my_info_view(request):
 
 
 @login_required
+@never_cache
 def top_view(request):
     plans = list(TravelPlan.objects.filter(
         Q(user=request.user) | Q(group__owner=request.user) | Q(group__members=request.user)
@@ -335,14 +333,24 @@ def plan_new(request):
 def _build_days_data(plan, user=None):
     days = range(1, plan.day_count + 1)
     days_data = []
-    member_count = len(plan.group.all_member_ids()) if plan.group_id else 0
+    # Only actual group members can respond (the owner's respond UI was
+    # removed), so the tally denominator must exclude the owner or it can
+    # never show as fully answered even once every member has responded.
+    member_count = plan.group.members.count() if plan.group_id else 0
     is_owner = bool(user and plan.user_id == user.id)
     for d in days:
         items = list(plan.schedule_items.filter(day_number=d))
         responses_by_item = {}
         if items:
             item_ids = [i.pk for i in items]
-            for r in CardResponse.objects.filter(item_id__in=item_ids).select_related('user'):
+            # Exclude any response left over from before the owner's own
+            # respond buttons were removed; the owner was never a real
+            # "member" and shouldn't count toward the tally or badges.
+            for r in (
+                CardResponse.objects.filter(item_id__in=item_ids)
+                .exclude(user_id=plan.user_id)
+                .select_related('user')
+            ):
                 responses_by_item.setdefault(r.item_id, []).append(r)
         for item in items:
             item.top_px, item.height_px = _item_position(item)
@@ -362,6 +370,7 @@ def _build_days_data(plan, user=None):
                     item.reject_comments = [
                         r for r in item_responses if r.status == 'rejected' and r.comment
                     ]
+                    item.responses_detail = item_responses
         _assign_overlap_columns(items)
         date = plan.start_date + timedelta(days=d - 1) if plan.start_date else None
         date_str = f'{date.month}月{date.day}日({WEEKDAY_JA[date.weekday()]})' if date else None
@@ -370,6 +379,7 @@ def _build_days_data(plan, user=None):
 
 
 @login_required
+@never_cache
 def plan_edit(request, pk):
     plan = _get_viewable_plan_or_404(pk, request.user)
     is_owner = plan.user_id == request.user.id
@@ -631,23 +641,39 @@ def group_delete(request, pk):
     return redirect('group_list')
 
 
+def _pending_approval_items(user):
+    """Approval-enabled cards, in plans shared via a group this user belongs to
+    (not owns), that this user hasn't responded to yet."""
+    return (
+        ScheduleItem.objects.filter(approval_enabled=True, plan__group__members=user)
+        .exclude(plan__user=user)
+        .exclude(responses__user=user)
+        .select_related('plan')
+        .order_by('-pk')
+    )
+
+
 @login_required
+@never_cache
 def notifications_view(request):
-    rejections = (
-        CardResponse.objects.filter(status='rejected', item__plan__user=request.user)
-        .exclude(comment='')
+    # Only unread entries are shown: marking one read (or answering a pending
+    # approval) is how a notification is "completed", so it should disappear
+    # from the list rather than linger around indefinitely.
+    responses = (
+        CardResponse.objects.filter(item__plan__user=request.user, is_read=False)
+        .exclude(user=request.user)
         .select_related('item', 'item__plan', 'user')
     )
     likes = (
-        PlanLike.objects.filter(plan__user=request.user)
+        PlanLike.objects.filter(plan__user=request.user, is_read=False)
         .exclude(user=request.user)
         .select_related('plan', 'user')
     )
     entries = []
-    for r in rejections:
+    for r in responses:
         entries.append({
-            'kind': 'reject', 'pk': r.pk, 'is_read': r.is_read, 'timestamp': r.updated_at,
-            'user': r.user, 'plan': r.item.plan, 'item': r.item, 'comment': r.comment,
+            'kind': 'response', 'pk': r.pk, 'is_read': r.is_read, 'timestamp': r.updated_at,
+            'user': r.user, 'plan': r.item.plan, 'item': r.item, 'status': r.status, 'comment': r.comment,
         })
     for like in likes:
         entries.append({
@@ -655,13 +681,16 @@ def notifications_view(request):
             'user': like.user, 'plan': like.plan,
         })
     entries.sort(key=lambda e: e['timestamp'], reverse=True)
-    return render(request, 'travel/notifications.html', {'notifications': entries})
+    return render(request, 'travel/notifications.html', {
+        'notifications': entries,
+        'pending_approvals': _pending_approval_items(request.user),
+    })
 
 
 @login_required
 @require_POST
 def notification_read(request, pk):
-    resp = get_object_or_404(CardResponse, pk=pk, status='rejected', item__plan__user=request.user)
+    resp = get_object_or_404(CardResponse, pk=pk, item__plan__user=request.user)
     if not resp.is_read:
         resp.is_read = True
         resp.save(update_fields=['is_read'])
@@ -820,8 +849,8 @@ def api_set_response(request, plan_pk, item_pk):
         'my_response': status if status in ('approved', 'rejected') else None,
     }
     if plan.user_id == request.user.id:
-        responses = list(item.responses.all())
+        responses = list(item.responses.exclude(user_id=plan.user_id))
         result['approved_count'] = sum(1 for r in responses if r.status == 'approved')
         result['rejected_count'] = sum(1 for r in responses if r.status == 'rejected')
-        result['member_count'] = len(plan.group.all_member_ids()) if plan.group_id else 0
+        result['member_count'] = plan.group.members.count() if plan.group_id else 0
     return JsonResponse(result)

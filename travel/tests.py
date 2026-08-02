@@ -9,7 +9,7 @@ from django.urls import reverse
 from .models import (
     CardResponse, CardTemplate, Group, PlanLike, Profile, ScheduleItem, TravelPlan,
 )
-from .views import CARD_TYPE_ORDER, DEFAULT_CARDS, ensure_defaults
+from .views import CARD_TYPE_ORDER, DEFAULT_CARDS, _build_days_data, ensure_defaults
 
 
 class RegistrationLoginTests(TestCase):
@@ -21,9 +21,10 @@ class RegistrationLoginTests(TestCase):
         self.assertRedirects(resp, reverse('top'))
         self.assertEqual(User.objects.get(username='alice').profile.home_address, '東京都渋谷区渋谷')
 
-    def test_register_without_address_redirects_to_set_home_address(self):
+    def test_register_without_address_still_redirects_to_top(self):
         resp = self.client.post(reverse('register'), {'username': 'erin', 'password': 'pass1234'})
-        self.assertRedirects(resp, reverse('set_home_address'))
+        self.assertRedirects(resp, reverse('top'))
+        self.assertEqual(User.objects.get(username='erin').profile.home_address, '')
 
     def test_register_duplicate_username_shows_error_and_does_not_create_second_user(self):
         User.objects.create_user(username='bob', password='pass1234')
@@ -49,10 +50,10 @@ class RegistrationLoginTests(TestCase):
         resp = self.client.post(reverse('login'), {'username': 'frank', 'password': 'pass1234'})
         self.assertRedirects(resp, reverse('top'))
 
-    def test_login_without_saved_address_redirects_to_set_home_address(self):
+    def test_login_without_saved_address_still_goes_to_top(self):
         User.objects.create_user(username='frank2', password='pass1234')
         resp = self.client.post(reverse('login'), {'username': 'frank2', 'password': 'pass1234'})
-        self.assertRedirects(resp, reverse('set_home_address'))
+        self.assertRedirects(resp, reverse('top'))
 
     def test_login_wrong_password_shows_error(self):
         User.objects.create_user(username='gina', password='pass1234')
@@ -457,6 +458,143 @@ class ApprovalFlowTests(TestCase):
         )
         self.assertEqual(resp.status_code, 404)
 
+    def test_owner_view_has_no_respond_buttons_but_member_view_does(self):
+        # 'approve-btn'/'reject-btn' also appear as CSS class selectors in
+        # <style>, so check for the rendered button's own text instead.
+        self.client.force_login(self.owner)
+        owner_resp = self.client.get(reverse('plan_edit', args=[self.plan.pk]))
+        self.assertNotContains(owner_resp, '>承諾<')
+        self.assertNotContains(owner_resp, '>拒否<')
+
+        self.client.force_login(self.member)
+        member_resp = self.client.get(reverse('plan_edit', args=[self.plan.pk]))
+        self.assertContains(member_resp, '>承諾<')
+        self.assertContains(member_resp, '>拒否<')
+
+    def test_owner_view_shows_who_approved_and_rejected(self):
+        second_member = User.objects.create_user(username='approvalmember2', password='pass1234')
+        self.group.members.add(second_member)
+
+        self.client.force_login(self.member)
+        self._respond('approved')
+        self.client.force_login(second_member)
+        self._respond('rejected')
+
+        self.client.force_login(self.owner)
+        resp = self.client.get(reverse('plan_edit', args=[self.plan.pk]))
+        self.assertContains(resp, 'approvalmember')
+        self.assertContains(resp, 'approvalmember2')
+
+    def test_tally_denominator_excludes_owner_so_it_can_reach_full_completion(self):
+        # The group here has exactly one real member (self.member); the owner
+        # can never respond (no UI for it), so the tally must read "1/1", not
+        # "1/2", once that one member has answered.
+        self.client.force_login(self.member)
+        self._respond('approved')
+
+        self.client.force_login(self.owner)
+        days, days_data = _build_days_data(self.plan, user=self.owner)
+        item = next(i for day in days_data for i in day['items'] if i.pk == self.item.pk)
+        self.assertEqual(item.member_count, 1)
+        self.assertEqual(item.approved_count, 1)
+
+    def test_stray_owner_response_does_not_inflate_tally_or_show_as_a_badge(self):
+        # A response the owner left behind from before their respond UI was
+        # removed shouldn't count as a real member response anywhere.
+        CardResponse.objects.create(item=self.item, user=self.owner, status='approved')
+
+        self.client.force_login(self.owner)
+        days, days_data = _build_days_data(self.plan, user=self.owner)
+        item = next(i for day in days_data for i in day['items'] if i.pk == self.item.pk)
+        self.assertEqual(item.approved_count, 0)
+        self.assertEqual(item.responses_detail, [])
+
+        # 'responder-badge' also appears as a CSS class selector in <style>,
+        # so check for the owner's name never being rendered as a badge instead.
+        resp = self.client.get(reverse('plan_edit', args=[self.plan.pk]))
+        self.assertNotContains(resp, '✅ approvalowner')
+        self.assertNotContains(resp, '🚫 approvalowner')
+
+    def test_owner_gets_notified_on_approval_not_just_rejection(self):
+        self.client.force_login(self.member)
+        self._respond('approved')
+
+        self.client.force_login(self.owner)
+        resp = self.client.get(reverse('notifications'))
+        kinds = [(n['kind'], n.get('status')) for n in resp.context['notifications']]
+        self.assertIn(('response', 'approved'), kinds)
+
+    def test_owner_unread_count_includes_approvals(self):
+        self.client.force_login(self.member)
+        self._respond('approved')
+
+        self.client.force_login(self.owner)
+        resp = self.client.get(reverse('top'))
+        self.assertEqual(resp.context['unread_notification_count'], 1)
+
+    def test_owner_can_mark_approval_notification_read(self):
+        self.client.force_login(self.member)
+        self._respond('approved')
+        response_obj = CardResponse.objects.get(item=self.item, user=self.member)
+
+        self.client.force_login(self.owner)
+        self.client.post(reverse('notification_read', args=[response_obj.pk]))
+        response_obj.refresh_from_db()
+        self.assertTrue(response_obj.is_read)
+
+    def test_read_response_notification_disappears_from_the_list(self):
+        self.client.force_login(self.member)
+        self._respond('approved')
+        response_obj = CardResponse.objects.get(item=self.item, user=self.member)
+
+        self.client.force_login(self.owner)
+        resp = self.client.get(reverse('notifications'))
+        self.assertEqual(len(resp.context['notifications']), 1)
+
+        self.client.post(reverse('notification_read', args=[response_obj.pk]))
+        resp2 = self.client.get(reverse('notifications'))
+        self.assertEqual(len(resp2.context['notifications']), 0)
+
+    def test_member_sees_pending_approval_until_they_respond(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(reverse('notifications'))
+        pending_ids = [item.pk for item in resp.context['pending_approvals']]
+        self.assertIn(self.item.pk, pending_ids)
+
+        self._respond('approved')
+        resp2 = self.client.get(reverse('notifications'))
+        pending_ids2 = [item.pk for item in resp2.context['pending_approvals']]
+        self.assertNotIn(self.item.pk, pending_ids2)
+
+    def test_member_unread_count_includes_pending_approval(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(reverse('top'))
+        self.assertEqual(resp.context['unread_notification_count'], 1)
+
+    def test_owner_does_not_see_their_own_item_as_pending_approval(self):
+        self.client.force_login(self.owner)
+        resp = self.client.get(reverse('notifications'))
+        self.assertEqual(len(resp.context['pending_approvals']), 0)
+
+    def test_non_group_member_does_not_see_pending_approval(self):
+        outsider = User.objects.create_user(username='approvaloutsider', password='pass1234')
+        self.client.force_login(outsider)
+        resp = self.client.get(reverse('notifications'))
+        self.assertEqual(len(resp.context['pending_approvals']), 0)
+
+    def test_owner_is_not_notified_of_their_own_response(self):
+        # The UI no longer offers approve/reject to the owner, but the API
+        # itself doesn't forbid it (owner always passes can_view); make sure
+        # that edge case still never self-notifies.
+        self.client.force_login(self.owner)
+        self._respond('approved')
+
+        resp = self.client.get(reverse('notifications'))
+        self.assertEqual(len(resp.context['notifications']), 0)
+
+        top_resp = self.client.get(reverse('top'))
+        self.assertEqual(top_resp.context['unread_notification_count'], 0)
+
 
 class GroupTests(TestCase):
     def setUp(self):
@@ -593,6 +731,16 @@ class LikeAndNotificationTests(TestCase):
         like.refresh_from_db()
         self.assertTrue(like.is_read)
 
+    def test_read_like_notification_disappears_from_the_list(self):
+        like = PlanLike.objects.create(plan=self.plan, user=self.fan)
+        self.client.force_login(self.owner)
+        resp = self.client.get(reverse('notifications'))
+        self.assertEqual(len(resp.context['notifications']), 1)
+
+        self.client.post(reverse('plan_like_read', args=[like.pk]))
+        resp2 = self.client.get(reverse('notifications'))
+        self.assertEqual(len(resp2.context['notifications']), 0)
+
 
 class ShareViewTests(TestCase):
     def test_share_link_viewable_without_login(self):
@@ -680,3 +828,16 @@ class SecurityTests(TestCase):
         ]:
             resp = self.client.get(reverse(name, args=args))
             self.assertEqual(resp.status_code, 405, f'{name} should reject GET')
+
+    def test_notification_bearing_pages_are_never_cached(self):
+        # The notification badge/list must always reflect fresh state after a
+        # reload, so the browser must never be allowed to serve a cached copy
+        # of these pages (which previously made completed items look stuck).
+        self.client.force_login(self.owner)
+        for name, args in [
+            ('top', []),
+            ('notifications', []),
+            ('plan_edit', [self.plan.pk]),
+        ]:
+            resp = self.client.get(reverse(name, args=args))
+            self.assertIn('no-store', resp.headers.get('Cache-Control', ''), f'{name} should be marked no-store')
