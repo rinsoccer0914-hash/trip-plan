@@ -1,0 +1,43 @@
+{% extends 'travel/base.html' %}
+{% block title %}マイページ - TravelPlan{% endblock %}
+{% block content %}
+<div class="container">
+  <h1 style="font-size:22px;font-weight:600;margin-bottom:24px">マイページ</h1>
+
+  <div class="card" style="margin-bottom:20px">
+    <h2 style="font-size:15px;font-weight:600;margin-bottom:12px">👤 ログイン名</h2>
+    <p style="font-size:14px;color:#1a1a1a;margin-bottom:12px">{{ user.username }}</p>
+    <form method="post" action="/logout/" style="margin:0">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary btn-sm">ログアウト</button>
+    </form>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <h2 style="font-size:15px;font-weight:600;margin-bottom:12px">🏠 自宅の住所</h2>
+    <p style="font-size:14px;color:#1a1a1a;margin-bottom:12px">{{ profile.home_address|default:"未設定" }}</p>
+    <a href="/profile/address/" class="btn btn-secondary btn-sm">住所を編集</a>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:15px;font-weight:600;margin-bottom:16px">🗺 作成したプラン（{{ plans|length }}件）</h2>
+    {% if plans %}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">
+      {% for plan in plans %}
+      <div style="border:1px solid #e5e5e0;border-radius:10px;padding:16px;cursor:pointer" onclick="location.href='/plan/{{ plan.pk }}/edit/'">
+        <div style="font-size:15px;font-weight:600;margin-bottom:8px">{{ plan.name }}</div>
+        {% if plan.start_date %}
+        <div style="font-size:12px;color:#666;margin-bottom:4px">📅 {{ plan.start_date|date:"Y/m/d" }} 〜 {{ plan.end_date|date:"Y/m/d" }}</div>
+        {% else %}
+        <div style="font-size:12px;color:#aaa;margin-bottom:4px">📅 日程未設定</div>
+        {% endif %}
+        <div style="font-size:12px;color:#666">📋 予定 {{ plan.total_cards }}件</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:40px 20px;color:#aaa;font-size:13px">まだプランを作成していません。<br><a href="/plan/new/">新しい旅行プラン</a>から作成できます。</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -62,11 +62,7 @@ a:hover{text-decoration:underline}
   <a class="nav-link" href="/cards/">新しいカードの作成</a>
   <a class="nav-link" href="/groups/">グループ</a>
   <a class="nav-notif" href="/notifications/" title="通知">🔔{% if unread_notification_count %}<span class="nav-notif-badge">{{ unread_notification_count }}</span>{% endif %}</a>
-  <a class="nav-notif" href="/profile/address/" title="自宅の住所を設定">🏠</a>
-  <span class="nav-user">{{ user.username }}</span>
-  <form method="post" action="/logout/" style="margin:0"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
-    <button type="submit" class="btn btn-secondary btn-sm">ログアウト</button>
-  </form>
+  <a class="nav-link" href="/mypage/">マイページ</a>
 </nav>
 {% endif %}
 {% block content %}{% endblock %}

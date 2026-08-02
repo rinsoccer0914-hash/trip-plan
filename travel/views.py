@@ -263,7 +263,7 @@ def login_view(request):
 def register_view(request):
     error = None
     if request.method == 'POST':
-        username = request.POST.get('username', '')
+        username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
         home_address = request.POST.get('home_address', '').strip()
         if User.objects.filter(username=username).exists():
@@ -294,6 +294,13 @@ def set_home_address_view(request):
         profile.save(update_fields=['home_address'])
         return redirect('top')
     return render(request, 'travel/set_address.html', {'profile': profile})
+
+
+@login_required
+def my_info_view(request):
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+    plans = TravelPlan.objects.filter(user=request.user)
+    return render(request, 'travel/my_info.html', {'profile': profile, 'plans': plans})
 
 
 @login_required
