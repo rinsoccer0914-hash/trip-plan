@@ -542,6 +542,33 @@ class ApprovalFlowTests(TestCase):
         response_obj.refresh_from_db()
         self.assertTrue(response_obj.is_read)
 
+    def test_notification_read_redirects_to_the_items_own_day(self):
+        self.item.day_number = 2
+        self.item.save(update_fields=['day_number'])
+        self.client.force_login(self.member)
+        self._respond('approved')
+        response_obj = CardResponse.objects.get(item=self.item, user=self.member)
+
+        self.client.force_login(self.owner)
+        resp = self.client.post(reverse('notification_read', args=[response_obj.pk]))
+        expected = reverse('plan_edit', args=[self.plan.pk]) + f'?day=2&item={self.item.pk}'
+        self.assertRedirects(resp, expected)
+
+    def test_plan_edit_exposes_focus_day_and_item_from_query_params(self):
+        self.client.force_login(self.owner)
+        url = reverse('plan_edit', args=[self.plan.pk]) + f'?day=2&item={self.item.pk}'
+        resp = self.client.get(url)
+        self.assertContains(resp, f'const FOCUS_DAY = 2;')
+        self.assertContains(resp, f'const FOCUS_ITEM = {self.item.pk};')
+
+    def test_plan_edit_ignores_malformed_focus_query_params(self):
+        self.client.force_login(self.owner)
+        url = reverse('plan_edit', args=[self.plan.pk]) + '?day=notanumber&item='
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'const FOCUS_DAY = null;')
+        self.assertContains(resp, 'const FOCUS_ITEM = null;')
+
     def test_read_response_notification_disappears_from_the_list(self):
         self.client.force_login(self.member)
         self._respond('approved')
@@ -565,6 +592,12 @@ class ApprovalFlowTests(TestCase):
         resp2 = self.client.get(reverse('notifications'))
         pending_ids2 = [item.pk for item in resp2.context['pending_approvals']]
         self.assertNotIn(self.item.pk, pending_ids2)
+
+    def test_pending_approval_link_includes_day_and_item(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(reverse('notifications'))
+        expected = f'/plan/{self.plan.pk}/edit/?day={self.item.day_number}&item={self.item.pk}'
+        self.assertContains(resp, expected)
 
     def test_member_unread_count_includes_pending_approval(self):
         self.client.force_login(self.member)

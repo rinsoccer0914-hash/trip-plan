@@ -393,6 +393,14 @@ def plan_edit(request, pk):
     ensure_defaults(request.user)
     templates = _ordered_templates(request.user)
     days, days_data = _build_days_data(plan, user=request.user)
+    try:
+        focus_day = int(request.GET.get('day', ''))
+    except ValueError:
+        focus_day = None
+    try:
+        focus_item = int(request.GET.get('item', ''))
+    except ValueError:
+        focus_item = None
     share_url = request.build_absolute_uri(reverse('plan_share', args=[plan.share_token]))
     my_groups = Group.objects.filter(owner=request.user) if is_owner else Group.objects.none()
     chat_messages = plan.group.messages.select_related('user') if plan.group_id else None
@@ -415,6 +423,8 @@ def plan_edit(request, pk):
         'chat_messages': chat_messages,
         'subtype_choices_json': json.dumps(SUBTYPE_CHOICES, ensure_ascii=False),
         'home_address_json': json.dumps(getattr(getattr(request.user, 'profile', None), 'home_address', '') or ''),
+        'focus_day_json': json.dumps(focus_day),
+        'focus_item_json': json.dumps(focus_item),
     })
 
 
@@ -694,7 +704,8 @@ def notification_read(request, pk):
     if not resp.is_read:
         resp.is_read = True
         resp.save(update_fields=['is_read'])
-    return redirect('plan_edit', pk=resp.item.plan_id)
+    url = reverse('plan_edit', args=[resp.item.plan_id])
+    return redirect(f'{url}?day={resp.item.day_number}&item={resp.item_id}')
 
 
 @login_required
