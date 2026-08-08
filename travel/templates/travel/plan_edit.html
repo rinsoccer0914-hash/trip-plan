@@ -39,6 +39,10 @@
 .top-bar{background:#fff;border-bottom:1px solid #e5e5e0;padding:10px 20px;display:flex;align-items:center;gap:12px}
 .cost-bar{background:#fffbeb;border-bottom:1px solid #fde68a;padding:8px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
 .cost-bar-label{font-size:13px;font-weight:600;color:#92400e}
+.edit-request-bar{background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:8px 20px;display:flex;flex-direction:column;gap:6px}
+.edit-request-bar-approved{background:#f0fdf4;border-bottom:1px solid #bbf7d0}
+.edit-request-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.edit-request-name{font-size:13px;font-weight:600;color:#1e40af}
 
 .timeline-outer{display:flex;border:1px solid #e5e5e0;border-radius:10px;background:#fff;max-height:calc(100vh - 220px);min-height:280px;overflow-y:auto}
 .ruler{width:52px;flex-shrink:0;position:relative;border-right:1px solid #eee;background:#fafaf8}
@@ -137,8 +141,15 @@
 .chat-log{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#f5f5f0}
 .chat-message{background:#fff;border:1px solid #e5e5e0;border-radius:10px;padding:6px 10px;max-width:85%;font-size:13px}
 .chat-message.mine{align-self:flex-end;background:#eff6ff;border-color:#bfdbfe}
-.chat-message-meta{font-size:10px;color:#888;margin-bottom:2px;display:flex;gap:6px}
+.chat-message-meta{font-size:10px;color:#888;margin-bottom:2px;display:flex;gap:6px;align-items:center}
 .chat-message-text{white-space:pre-wrap;word-break:break-word}
+.chat-message-edited{color:#aaa;font-size:9px}
+.chat-message-actions{display:flex;gap:8px;margin-top:3px}
+.chat-message-actions button{background:none;border:none;color:#888;font-size:10px;cursor:pointer;padding:0}
+.chat-message-actions button:hover{color:#2563eb;text-decoration:underline}
+.chat-edit-row{display:flex;gap:6px;margin-top:4px}
+.chat-edit-row input{flex:1;padding:5px 8px;border:1px solid #d0d0cc;border-radius:6px;font-size:12px}
+.mention{color:#2563eb;font-weight:600}
 .chat-empty{text-align:center;color:#aaa;font-size:13px;padding:20px}
 .chat-input-row{display:flex;gap:8px;padding:10px;border-top:1px solid #e5e5e0;flex-shrink:0}
 .chat-input-row input{flex:1;padding:8px 10px;border:1px solid #d0d0cc;border-radius:8px;font-size:13px}
@@ -175,6 +186,59 @@
   <button class="btn btn-secondary btn-sm" onclick="openShareModal()" title="共有">🔗</button>
   <button class="btn btn-primary btn-sm" onclick="savePlan()">保存して戻る</button>
 </div>
+{% if is_owner and edit_requests %}
+<div class="edit-request-bar">
+  {% for req in edit_requests %}
+  <div class="edit-request-row">
+    <span class="edit-request-name">✏️ {{ req.user.username }}</span>
+    {% if req.status == 'pending' %}
+    <span class="badge" style="background:#dbeafe;color:#1d4ed8">申請中</span>
+    <form method="post" action="/plan/{{ plan.pk }}/edit-request/{{ req.pk }}/respond/" style="margin:0">
+      {% csrf_token %}
+      <input type="hidden" name="status" value="approved">
+      <button type="submit" class="btn btn-primary btn-sm">許可する</button>
+    </form>
+    <form method="post" action="/plan/{{ plan.pk }}/edit-request/{{ req.pk }}/respond/" style="margin:0">
+      {% csrf_token %}
+      <input type="hidden" name="status" value="rejected">
+      <button type="submit" class="btn btn-secondary btn-sm">却下する</button>
+    </form>
+    {% elif req.status == 'approved' %}
+    <span class="badge" style="background:#d1fae5;color:#065f46">編集許可済み</span>
+    <form method="post" action="/plan/{{ plan.pk }}/edit-request/{{ req.pk }}/revoke/" style="margin:0">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('編集許可を取り消しますか？')">取り消す</button>
+    </form>
+    {% else %}
+    <span class="badge" style="background:#f3f4f6;color:#374151">却下済み</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% if not is_owner and plan.group_id %}
+<div class="edit-request-bar{% if can_edit_cards %} edit-request-bar-approved{% endif %}">
+  <div class="edit-request-row">
+    {% if can_edit_cards %}
+    <span class="edit-request-name" style="color:#065f46">✅ 編集が許可されています。予定を編集できます。</span>
+    {% elif my_edit_request.status == 'pending' %}
+    <span class="edit-request-name">✏️ 編集を申請中です（オーナーの承認をお待ちください）</span>
+    {% elif my_edit_request.status == 'rejected' %}
+    <span class="edit-request-name" style="color:#991b1b">✏️ 編集の申請は却下されました</span>
+    <form method="post" action="/plan/{{ plan.pk }}/request-edit/" style="margin:0">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary btn-sm">再度申請する</button>
+    </form>
+    {% else %}
+    <span class="edit-request-name">この予定表は閲覧のみです</span>
+    <form method="post" action="/plan/{{ plan.pk }}/request-edit/" style="margin:0">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary btn-sm">✏️ 編集を申請する</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 {% if plan.warikan_enabled and is_owner %}
 <div class="cost-bar">
   <span class="cost-bar-label">💰 割り勘</span>
@@ -189,7 +253,7 @@
 </div>
 {% endif %}
 <div class="editor-wrap">
-  {% if is_owner %}
+  {% if can_edit_cards %}
   <!-- Palette -->
   <div class="palette">
     <div class="palette-head">
@@ -242,17 +306,17 @@
           {% endfor %}
         </div>
         <div class="timeline" id="timeline-{{ day.number }}" style="height:{{ day_height }}px"
-             {% if is_owner %}
+             {% if can_edit_cards %}
              ondragover="event.preventDefault()"
              ondragenter="this.classList.add('drag-over')"
              ondragleave="this.classList.remove('drag-over')"
              ondrop="onTimelineDrop(event, {{ day.number }})"
              {% endif %}>
           {% for item in day.items %}
-          <div class="t-card type-{{ item.card_type }}" {% if is_owner %}draggable="true"{% endif %} data-item="{{ item.pk }}" data-day="{{ day.number }}"
+          <div class="t-card type-{{ item.card_type }}" {% if can_edit_cards %}draggable="true"{% endif %} data-item="{{ item.pk }}" data-day="{{ day.number }}"
                style="top:{{ item.top_px }}px;height:{{ item.height_px }}px;left:calc({{ item.left_pct }}% + 4px);width:calc({{ item.width_pct }}% - 8px)"
-               {% if is_owner %}ondragstart="itemDragStart(event)"{% endif %}>
-            {% if is_owner %}
+               {% if can_edit_cards %}ondragstart="itemDragStart(event)"{% endif %}>
+            {% if can_edit_cards %}
             <div class="t-card-time">
               <div class="time-pick t-start">
                 <select class="t-hour" onchange="updateCardTime({{ item.pk }}, this)">
@@ -282,7 +346,7 @@
                 <span class="t-name">{{ item.name }}</span>
               </div>
               {% if item.card_type == 'move' %}
-                {% if is_owner %}
+                {% if can_edit_cards %}
                 <div class="t-route-row">
                   <input type="text" class="t-route-input t-route-from" placeholder="出発地" value="{{ item.from_location }}" onchange="updateRoute({{ item.pk }})">
                   <span class="t-route-arrow">→</span>
@@ -293,14 +357,14 @@
                 {% endif %}
               {% endif %}
               {% if item.memo %}<div class="t-memo-text" title="{{ item.memo }}">{{ item.memo }}</div>{% endif %}
-              {% if plan.warikan_enabled and is_owner %}
+              {% if plan.warikan_enabled and can_edit_cards %}
               <div class="t-cost-row">
                 💰<input type="number" class="t-cost-input" min="0" step="100" placeholder="金額" value="{% if item.cost %}{{ item.cost }}{% endif %}" onchange="updateCost({{ item.pk }}, this)">円
                 {% if item.cost %}<span class="t-cost-per-person">= ¥{{ item.cost_per_person }}/人（{{ plan.participant_count }}人で割った額）</span>{% endif %}
               </div>
               {% endif %}
               {% if item.card_type == 'wake' %}
-                {% if is_owner %}
+                {% if can_edit_cards %}
                 <div class="t-alarm-row">
                   <label>
                     <input type="checkbox" {% if item.alarm_enabled %}checked{% endif %} onchange="updateAlarm({{ item.pk }}, this)">
@@ -353,12 +417,12 @@
               </div>
               {% endif %}
             </div>
-            {% if is_owner %}
+            {% if can_edit_cards %}
             <button class="t-del" onclick="removeItem({{ item.pk }}, this)" title="削除">×</button>
             {% endif %}
           </div>
           {% empty %}
-          <div class="timeline-empty-hint">{% if is_owner %}左のカードをドラッグしてここにドロップ{% else %}この日の予定はまだありません{% endif %}</div>
+          <div class="timeline-empty-hint">{% if can_edit_cards %}左のカードをドラッグしてここにドロップ{% else %}この日の予定はまだありません{% endif %}</div>
           {% endfor %}
         </div>
       </div>
@@ -468,16 +532,30 @@
   </div>
   <div class="chat-log" id="plan-chat-log">
     {% for msg in chat_messages %}
-    <div class="chat-message {% if msg.user == user %}mine{% endif %}">
-      <div class="chat-message-meta"><strong>{{ msg.user.username }}</strong><span>{{ msg.created_at|date:"m/d H:i" }}</span></div>
-      <div class="chat-message-text">{{ msg.text }}</div>
+    <div class="chat-message {% if msg.user == user %}mine{% endif %}" data-msg-id="{{ msg.pk }}">
+      <div class="chat-message-meta">
+        <strong>{{ msg.user.username }}</strong><span>{{ msg.created_at|date:"m/d H:i" }}</span>
+        {% if msg.edited_at %}<span class="chat-message-edited">（編集済み）</span>{% endif %}
+      </div>
+      <div class="chat-message-text" id="plan-chat-text-{{ msg.pk }}">{{ msg.html_text }}</div>
+      {% if msg.user == user %}
+      <div class="chat-message-actions">
+        <button type="button" onclick="startEditMessage({{ msg.pk }})">編集</button>
+        <button type="button" onclick="deleteMessage({{ msg.pk }})">削除</button>
+      </div>
+      <div class="chat-edit-row" id="plan-chat-edit-{{ msg.pk }}" style="display:none">
+        <input type="text" id="plan-chat-edit-input-{{ msg.pk }}" value="{{ msg.text }}">
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveEditMessage({{ msg.pk }})">保存</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="cancelEditMessage({{ msg.pk }})">取消</button>
+      </div>
+      {% endif %}
     </div>
     {% empty %}
     <div class="chat-empty">まだメッセージがありません</div>
     {% endfor %}
   </div>
   <div class="chat-input-row">
-    <input type="text" id="chat-input" placeholder="メッセージを入力" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
+    <input type="text" id="chat-input" placeholder="メッセージを入力（@ユーザー名でメンション）" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();sendChatMessage();}">
     <button type="button" class="btn btn-primary btn-sm" onclick="sendChatMessage()">送信</button>
   </div>
 </div>
@@ -719,6 +797,34 @@ function timeToMinutes(hhmm) {
   return h * 60 + m;
 }
 
+// Shared POST helper: returns the response on success, or null (after
+// alerting the user) on failure — used so a rejected request (e.g. two
+// same-type cards overlapping) never fails silently and looks like nothing
+// happened.
+async function postJSON(url, body) {
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+      body: JSON.stringify(body)
+    });
+  } catch (e) {
+    alert('通信に失敗しました。もう一度お試しください。');
+    return null;
+  }
+  if (!res.ok) {
+    let message = '操作に失敗しました。もう一度お試しください。';
+    try {
+      const data = await res.json();
+      if (data && data.error) message = data.error;
+    } catch (e) { /* non-JSON error body, use the default message */ }
+    alert(message);
+    return null;
+  }
+  return res;
+}
+
 async function submitAddModal() {
   if (!modalTpl) return;
   const day = document.getElementById('modal-day').value;
@@ -735,15 +841,12 @@ async function submitAddModal() {
     duration = timeToMinutes(endTime) - timeToMinutes(startTime);
     if (duration <= 0) duration += 24 * 60; // end time past midnight
   }
-  await fetch('/api/plan/' + PLAN_ID + '/add/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({
-      day: day, template_id: modalTpl.tpl, start_time: startTime, duration_minutes: duration,
-      memo: memo, alarm_enabled: alarmEnabled, from_location: fromLocation, to_location: toLocation,
-      subtype: subtype,
-    })
+  const res = await postJSON('/api/plan/' + PLAN_ID + '/add/', {
+    day: day, template_id: modalTpl.tpl, start_time: startTime, duration_minutes: duration,
+    memo: memo, alarm_enabled: alarmEnabled, from_location: fromLocation, to_location: toLocation,
+    subtype: subtype,
   });
+  if (!res) return; // failed (e.g. overlapping same-type card) — keep the modal open so the user can adjust
   saveScroll();
   location.reload();
 }
@@ -760,19 +863,11 @@ function pxToTime(y) {
 }
 
 async function addItem(day, startTime) {
-  await fetch('/api/plan/' + PLAN_ID + '/add/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({day: day, template_id: draggingTpl.tpl, start_time: startTime})
-  });
+  await postJSON('/api/plan/' + PLAN_ID + '/add/', {day: day, template_id: draggingTpl.tpl, start_time: startTime});
 }
 
 async function moveItem(id, day, startTime) {
-  await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({day: day, start_time: startTime})
-  });
+  await postJSON('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {day: day, start_time: startTime});
 }
 
 async function onTimelineDrop(e, day) {
@@ -806,13 +901,9 @@ async function updateCardTime(id, input) {
     duration = timeToMinutes(endTime) - timeToMinutes(startTime);
     if (duration <= 0) duration += 24 * 60; // end time past midnight
   }
-  await fetch('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-    body: JSON.stringify({start_time: startTime || null, duration_minutes: duration})
-  });
+  await postJSON('/api/plan/' + PLAN_ID + '/item/' + id + '/time/', {start_time: startTime || null, duration_minutes: duration});
   saveScroll();
-  location.reload();
+  location.reload(); // resync either way: on failure this reverts the select back to the saved time
 }
 
 async function updateCost(id, input) {
@@ -919,6 +1010,7 @@ function savePlan() {
 {% if plan.group_id %}
 const GROUP_ID = {{ plan.group.pk }};
 let chatPollTimer = null;
+let chatEditingId = null; // paused while the user has an edit box open, so polling can't wipe it
 
 function escapeHtml(str) {
   const div = document.createElement('div');
@@ -939,14 +1031,28 @@ function renderChatMessages(messages) {
     return;
   }
   log.innerHTML = messages.map(function(m) {
-    return '<div class="chat-message' + (m.is_mine ? ' mine' : '') + '">' +
-      '<div class="chat-message-meta"><strong>' + escapeHtml(m.username) + '</strong><span>' + escapeHtml(m.created_at) + '</span></div>' +
-      '<div class="chat-message-text">' + escapeHtml(m.text) + '</div>' +
-    '</div>';
+    let html = '<div class="chat-message' + (m.is_mine ? ' mine' : '') + '" data-msg-id="' + m.id + '">' +
+      '<div class="chat-message-meta"><strong>' + escapeHtml(m.username) + '</strong><span>' + escapeHtml(m.created_at) + '</span>' +
+      (m.edited ? '<span class="chat-message-edited">（編集済み）</span>' : '') + '</div>' +
+      '<div class="chat-message-text" id="plan-chat-text-' + m.id + '">' + m.html_text + '</div>';
+    if (m.is_mine) {
+      html += '<div class="chat-message-actions">' +
+        '<button type="button" onclick="startEditMessage(' + m.id + ')">編集</button>' +
+        '<button type="button" onclick="deleteMessage(' + m.id + ')">削除</button>' +
+      '</div>' +
+      '<div class="chat-edit-row" id="plan-chat-edit-' + m.id + '" style="display:none">' +
+        '<input type="text" id="plan-chat-edit-input-' + m.id + '" value="' + escapeHtml(m.text) + '">' +
+        '<button type="button" class="btn btn-primary btn-sm" onclick="saveEditMessage(' + m.id + ')">保存</button>' +
+        '<button type="button" class="btn btn-secondary btn-sm" onclick="cancelEditMessage(' + m.id + ')">取消</button>' +
+      '</div>';
+    }
+    return html + '</div>';
   }).join('');
+  if (chatEditingId) startEditMessage(chatEditingId);
 }
 
-async function fetchChatMessages() {
+async function fetchChatMessages(force) {
+  if (chatEditingId && !force) return; // background polling must not blow away an in-progress edit
   const res = await fetch('/api/groups/' + GROUP_ID + '/messages/');
   const data = await res.json();
   renderChatMessages(data.messages);
@@ -965,6 +1071,53 @@ async function sendChatMessage() {
   const data = await res.json();
   renderChatMessages(data.messages);
   scrollChatToBottom();
+}
+
+function startEditMessage(id) {
+  chatEditingId = id;
+  const text = document.getElementById('plan-chat-text-' + id);
+  const row = document.getElementById('plan-chat-edit-' + id);
+  if (text) text.style.display = 'none';
+  if (row) row.style.display = 'flex';
+}
+
+function cancelEditMessage(id) {
+  chatEditingId = null;
+  const text = document.getElementById('plan-chat-text-' + id);
+  const row = document.getElementById('plan-chat-edit-' + id);
+  if (text) text.style.display = '';
+  if (row) row.style.display = 'none';
+}
+
+async function saveEditMessage(id) {
+  const input = document.getElementById('plan-chat-edit-input-' + id);
+  const text = input.value.trim();
+  if (!text) return;
+  const res = await fetch('/api/groups/' + GROUP_ID + '/messages/' + id + '/edit/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({text: text})
+  });
+  if (!res.ok) {
+    alert('編集に失敗しました。もう一度お試しください。');
+    return;
+  }
+  chatEditingId = null;
+  await fetchChatMessages(true);
+}
+
+async function deleteMessage(id) {
+  if (!confirm('このメッセージを削除しますか？')) return;
+  const res = await fetch('/api/groups/' + GROUP_ID + '/messages/' + id + '/delete/', {
+    method: 'POST',
+    headers: {'X-CSRFToken': CSRF}
+  });
+  if (!res.ok) {
+    alert('削除に失敗しました。もう一度お試しください。');
+    return;
+  }
+  if (chatEditingId === id) chatEditingId = null;
+  await fetchChatMessages(true);
 }
 
 function startChatPolling() {

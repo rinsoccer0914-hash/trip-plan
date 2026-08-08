@@ -1,6 +1,25 @@
+import secrets
+import string
 import uuid
 from django.db import models
 from django.contrib.auth.models import User
+
+USER_CODE_ALPHABET = string.ascii_letters + string.digits
+
+
+def generate_user_code():
+    """xxxx-xxxx of random letters/digits — an alphanumeric+symbol ID people
+    can search for and share without exposing their username/email."""
+    part1 = ''.join(secrets.choice(USER_CODE_ALPHABET) for _ in range(4))
+    part2 = ''.join(secrets.choice(USER_CODE_ALPHABET) for _ in range(4))
+    return f'{part1}-{part2}'
+
+
+def generate_unique_user_code():
+    while True:
+        code = generate_user_code()
+        if not Profile.objects.filter(user_code=code).exists():
+            return code
 
 
 class Profile(models.Model):
@@ -8,9 +27,19 @@ class Profile(models.Model):
     # Deliberately coarse: town-level only (e.g. "東京都渋谷区渋谷"), never a full
     # street address, since this gets baked into move cards other people can see.
     home_address = models.CharField(max_length=200, blank=True, default='')
+    # Auto-generated at registration (see generate_user_code), user-editable
+    # afterwards. Search key for adding group members instead of username,
+    # since usernames here are often full email addresses.
+    user_code = models.CharField(max_length=32, unique=True, null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.username} の住所"
+
+    def ensure_user_code(self):
+        if not self.user_code:
+            self.user_code = generate_unique_user_code()
+            self.save(update_fields=['user_code'])
+        return self.user_code
 
 
 class Group(models.Model):
@@ -36,6 +65,8 @@ class GroupMessage(models.Model):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='messages')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     text = models.TextField()
+    mentions = models.ManyToManyField(User, related_name='chat_mentions', blank=True)
+    edited_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -82,8 +113,12 @@ class TravelPlan(models.Model):
         return round(self.total_cost / (self.participant_count or 1))
 
     def can_edit(self, user):
-        """Only the owner may add/move/edit/delete schedule items or plan settings."""
-        return self.user_id == user.id
+        """The owner may always edit. A group member may also edit schedule
+        cards (not plan-level settings) once the owner has approved their
+        edit request; see EditRequest."""
+        if self.user_id == user.id:
+            return True
+        return self.edit_requests.filter(user=user, status='approved').exists()
 
     def can_view(self, user):
         """Owner or a member of the plan's group may open the plan and respond to cards."""
@@ -177,3 +212,26 @@ class PlanLike(models.Model):
 
     def __str__(self):
         return f"{self.user.username} likes {self.plan.name}"
+
+
+class EditRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', '申請中'),
+        ('approved', '許可'),
+        ('rejected', '却下'),
+    ]
+    plan = models.ForeignKey(TravelPlan, on_delete=models.CASCADE, related_name='edit_requests')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    # Whether the requester has seen the owner's decision (approved/rejected).
+    # Meaningless while status is still 'pending' — that's surfaced to the
+    # owner via the plain existence of a pending row, not a read flag.
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('plan', 'user')
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.plan.name}: {self.get_status_display()}"

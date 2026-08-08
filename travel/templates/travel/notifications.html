@@ -4,6 +4,32 @@
 <div class="container" style="max-width:720px">
   <h1 style="font-size:22px;font-weight:600;margin-bottom:24px">🔔 通知</h1>
 
+  {% if pending_edit_requests %}
+  <h2 style="font-size:14px;font-weight:600;color:#888;margin-bottom:10px">編集許可の申請</h2>
+  <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
+    {% for req in pending_edit_requests %}
+    <div class="card" style="padding:16px 20px;border-color:#93c5fd;background:#f8fbff">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:14px;font-weight:600">{{ req.user.username }}</span>
+        <span style="font-size:12px;color:#888">さんが「{{ req.plan.name }}」の編集を申請しています</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <form method="post" action="/plan/{{ req.plan.pk }}/edit-request/{{ req.pk }}/respond/" style="margin:0">
+          {% csrf_token %}
+          <input type="hidden" name="status" value="approved">
+          <button type="submit" class="btn btn-primary btn-sm">許可する</button>
+        </form>
+        <form method="post" action="/plan/{{ req.plan.pk }}/edit-request/{{ req.pk }}/respond/" style="margin:0">
+          {% csrf_token %}
+          <input type="hidden" name="status" value="rejected">
+          <button type="submit" class="btn btn-secondary btn-sm">却下する</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% if pending_approvals %}
   <h2 style="font-size:14px;font-weight:600;color:#888;margin-bottom:10px">承認待ち</h2>
   <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
@@ -46,7 +72,7 @@
         <div style="font-size:12px;color:#aaa">{{ n.timestamp|date:"Y/m/d H:i" }}</div>
       </button>
     </form>
-    {% else %}
+    {% elif n.kind == 'like' %}
     <form method="post" action="/notifications/like/{{ n.pk }}/read/" style="margin:0">
       {% csrf_token %}
       <button type="submit" class="card" style="display:block;width:100%;text-align:left;padding:16px 20px;color:inherit;font:inherit;cursor:pointer;border-color:#93c5fd;background:#f8fbff">
@@ -60,10 +86,30 @@
         <div style="font-size:12px;color:#aaa">{{ n.timestamp|date:"Y/m/d H:i" }}</div>
       </button>
     </form>
+    {% else %}
+    <form method="post" action="/notifications/edit-request/{{ n.pk }}/read/" style="margin:0">
+      {% csrf_token %}
+      <button type="submit" class="card" style="display:block;width:100%;text-align:left;padding:16px 20px;color:inherit;font:inherit;cursor:pointer;border-color:#93c5fd;background:#f8fbff">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:14px;font-weight:600">{{ n.plan.name }}</span>
+          <span class="badge" style="background:#dbeafe;color:#1d4ed8">未読</span>
+        </div>
+        {% if n.status == 'approved' %}
+        <div style="font-size:13px;color:#065f46;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;margin-bottom:6px">
+          ✏️ 編集が許可されました
+        </div>
+        {% else %}
+        <div style="font-size:13px;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 12px;margin-bottom:6px">
+          ✏️ 編集の申請が却下されました
+        </div>
+        {% endif %}
+        <div style="font-size:12px;color:#aaa">{{ n.timestamp|date:"Y/m/d H:i" }}</div>
+      </button>
+    </form>
     {% endif %}
     {% endfor %}
   </div>
-  {% elif not pending_approvals %}
+  {% elif not pending_approvals and not pending_edit_requests %}
   <div style="text-align:center;padding:80px 20px;color:#aaa">
     <div style="font-size:48px;margin-bottom:16px">🔔</div>
     <div style="font-size:16px">通知はありません</div>

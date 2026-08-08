@@ -14,6 +14,17 @@
   </div>
 
   <div class="card" style="margin-bottom:20px">
+    <h2 style="font-size:15px;font-weight:600;margin-bottom:12px">🆔 ID</h2>
+    <p style="font-size:12px;color:#666;margin-bottom:12px">グループにメンバーを追加する際、このIDが使われます。他の人に伝えてください。</p>
+    {% if error %}<div class="error-msg" style="margin-bottom:12px">{{ error }}</div>{% endif %}
+    <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      {% csrf_token %}
+      <input type="text" name="user_code" value="{{ profile.user_code }}" style="padding:8px 10px;border:1px solid #d0d0cc;border-radius:8px;font-size:14px;font-family:monospace;width:160px">
+      <button type="submit" class="btn btn-secondary btn-sm">IDを変更する</button>
+    </form>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
     <h2 style="font-size:15px;font-weight:600;margin-bottom:12px">🏠 自宅の住所</h2>
     <p style="font-size:14px;color:#1a1a1a;margin-bottom:12px">{{ profile.home_address|default:"未設定" }}</p>
     <a href="/profile/address/" class="btn btn-secondary btn-sm">住所を編集</a>

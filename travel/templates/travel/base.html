@@ -11,6 +11,7 @@ a{color:#2563eb;text-decoration:none}
 a:hover{text-decoration:underline}
 .nav{background:#fff;border-bottom:1px solid #e5e5e0;padding:0 24px;height:56px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100}
 .nav-logo{font-size:18px;font-weight:600;color:#1a1a1a;display:flex;align-items:center;gap:8px}
+.nav-logo:hover{text-decoration:none}
 .nav-logo span{color:#2563eb}
 .nav-spacer{flex:1}
 .nav-user{font-size:13px;color:#666}
@@ -56,7 +57,7 @@ a:hover{text-decoration:underline}
 <body>
 {% if user.is_authenticated %}
 <nav class="nav">
-  <div class="nav-logo">✈ <span>Travel</span>Plan</div>
+  <a class="nav-logo" href="/">✈ <span>Travel</span>Plan</a>
   <div class="nav-spacer"></div>
   <a class="nav-link" href="/">マイプラン</a>
   <a class="nav-link" href="/cards/">新しいカードの作成</a>

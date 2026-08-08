@@ -7,7 +7,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from .models import (
-    CardResponse, CardTemplate, Group, PlanLike, Profile, ScheduleItem, TravelPlan,
+    CardResponse, CardTemplate, EditRequest, Group, GroupMessage, PlanLike, Profile, ScheduleItem, TravelPlan,
 )
 from .views import CARD_TYPE_ORDER, DEFAULT_CARDS, _build_days_data, ensure_defaults
 
@@ -126,6 +126,94 @@ class MyInfoPageTests(TestCase):
         self.client.logout()
         resp = self.client.get(reverse('my_info'))
         self.assertRedirects(resp, f"{reverse('login')}?next={reverse('my_info')}")
+
+
+class UserCodeTests(TestCase):
+    def test_register_auto_generates_alphanumeric_symbol_code(self):
+        self.client.post(reverse('register'), {'username': 'codeuser1', 'password': 'pass1234'})
+        code = User.objects.get(username='codeuser1').profile.user_code
+        self.assertIsNotNone(code)
+        self.assertTrue(any(c.isalpha() for c in code))
+        self.assertTrue(any(c.isdigit() for c in code))
+        self.assertTrue(any(not c.isalnum() for c in code))
+
+    def test_login_backfills_code_for_existing_profile_without_one(self):
+        user = User.objects.create_user(username='codeuser2', password='pass1234')
+        Profile.objects.create(user=user, home_address='x')  # no user_code yet, like pre-migration data
+        self.client.post(reverse('login'), {'username': 'codeuser2', 'password': 'pass1234'})
+        user.profile.refresh_from_db()
+        self.assertIsNotNone(user.profile.user_code)
+
+    def test_generated_codes_are_unique(self):
+        self.client.post(reverse('register'), {'username': 'codeuser3', 'password': 'pass1234'})
+        self.client.post(reverse('register'), {'username': 'codeuser4', 'password': 'pass1234'})
+        code3 = User.objects.get(username='codeuser3').profile.user_code
+        code4 = User.objects.get(username='codeuser4').profile.user_code
+        self.assertNotEqual(code3, code4)
+
+    def test_my_page_shows_own_code(self):
+        user = User.objects.create_user(username='codeuser5', password='pass1234')
+        profile = Profile.objects.create(user=user, home_address='x')
+        profile.ensure_user_code()
+        self.client.force_login(user)
+        resp = self.client.get(reverse('my_info'))
+        self.assertContains(resp, profile.user_code)
+
+    def test_user_can_change_own_code(self):
+        user = User.objects.create_user(username='codeuser6', password='pass1234')
+        profile = Profile.objects.create(user=user, home_address='x')
+        profile.ensure_user_code()
+        self.client.force_login(user)
+        resp = self.client.post(reverse('my_info'), {'user_code': 'my-custom-id'})
+        self.assertEqual(resp.status_code, 200)
+        profile.refresh_from_db()
+        self.assertEqual(profile.user_code, 'my-custom-id')
+
+    def test_cannot_change_code_to_one_already_taken(self):
+        userA = User.objects.create_user(username='codeuserA', password='pass1234')
+        profileA = Profile.objects.create(user=userA, home_address='x')
+        profileA.ensure_user_code()
+        userB = User.objects.create_user(username='codeuserB', password='pass1234')
+        profileB = Profile.objects.create(user=userB, home_address='x')
+        profileB.ensure_user_code()
+
+        self.client.force_login(userB)
+        resp = self.client.post(reverse('my_info'), {'user_code': profileA.user_code})
+        self.assertContains(resp, 'そのIDはすでに使われています')
+        profileB.refresh_from_db()
+        self.assertNotEqual(profileB.user_code, profileA.user_code)
+
+    def test_cannot_change_code_to_blank(self):
+        user = User.objects.create_user(username='codeuser7', password='pass1234')
+        profile = Profile.objects.create(user=user, home_address='x')
+        profile.ensure_user_code()
+        original = profile.user_code
+        self.client.force_login(user)
+        resp = self.client.post(reverse('my_info'), {'user_code': '   '})
+        self.assertContains(resp, 'IDを入力してください')
+        profile.refresh_from_db()
+        self.assertEqual(profile.user_code, original)
+
+    def test_editing_code_lets_new_code_be_used_and_retires_old_one(self):
+        owner = User.objects.create_user(username='codeowner', password='pass1234')
+        owner_profile = Profile.objects.create(user=owner, home_address='x')
+        owner_profile.ensure_user_code()
+        member = User.objects.create_user(username='codemember', password='pass1234')
+        member_profile = Profile.objects.create(user=member, home_address='x')
+        member_profile.ensure_user_code()
+        old_code = member_profile.user_code
+
+        self.client.force_login(member)
+        self.client.post(reverse('my_info'), {'user_code': 'new-member-id'})
+
+        group = Group.objects.create(name='IDテストグループ', owner=owner)
+        self.client.force_login(owner)
+        resp_old = self.client.post(reverse('group_detail', args=[group.pk]), {'user_code': old_code})
+        self.assertContains(resp_old, 'そのIDのユーザーは見つかりません')
+
+        resp_new = self.client.post(reverse('group_detail', args=[group.pk]), {'user_code': 'new-member-id'})
+        self.assertNotContains(resp_new, 'そのIDのユーザーは見つかりません')
+        self.assertTrue(group.is_member(member))
 
 
 class PlanManagementTests(TestCase):
@@ -399,6 +487,248 @@ class ScheduleItemApiTests(TestCase):
         resp = self.client.get(reverse('api_add_item', args=[self.plan.pk]))
         self.assertEqual(resp.status_code, 405)
 
+    def test_cannot_add_overlapping_card_of_the_same_type(self):
+        self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 1, 'template_id': self.move_tpl.pk, 'start_time': '10:00', 'duration_minutes': 60,
+        })
+        resp = self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 1, 'template_id': self.move_tpl.pk, 'start_time': '10:30', 'duration_minutes': 60,
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('error', resp.json())
+        self.assertEqual(ScheduleItem.objects.filter(plan=self.plan, card_type='move').count(), 1)
+
+    def test_can_add_overlapping_card_of_a_different_type(self):
+        self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 1, 'template_id': self.move_tpl.pk, 'start_time': '10:00', 'duration_minutes': 60,
+        })
+        resp = self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 1, 'template_id': self.wake_tpl.pk, 'start_time': '10:30', 'duration_minutes': 60,
+        })
+        self.assertEqual(resp.status_code, 200)
+
+    def test_can_add_same_type_card_on_a_different_day_at_the_same_time(self):
+        self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 1, 'template_id': self.move_tpl.pk, 'start_time': '10:00', 'duration_minutes': 60,
+        })
+        resp = self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 2, 'template_id': self.move_tpl.pk, 'start_time': '10:00', 'duration_minutes': 60,
+        })
+        self.assertEqual(resp.status_code, 200)
+
+    def test_can_add_same_type_card_immediately_after_another_ends(self):
+        # Back-to-back (touching, not overlapping) should be allowed.
+        self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 1, 'template_id': self.move_tpl.pk, 'start_time': '10:00', 'duration_minutes': 60,
+        })
+        resp = self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 1, 'template_id': self.move_tpl.pk, 'start_time': '11:00', 'duration_minutes': 60,
+        })
+        self.assertEqual(resp.status_code, 200)
+
+    def test_cannot_move_card_onto_an_overlapping_same_type_card(self):
+        self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 1, 'template_id': self.move_tpl.pk, 'start_time': '10:00', 'duration_minutes': 60,
+        })
+        resp2 = self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 1, 'template_id': self.move_tpl.pk, 'start_time': '14:00', 'duration_minutes': 60,
+        })
+        second_item_id = resp2.json()['id']
+
+        move_resp = self._post_json(
+            reverse('api_update_time', args=[self.plan.pk, second_item_id]),
+            {'start_time': '10:15'},
+        )
+        self.assertEqual(move_resp.status_code, 400)
+        item = ScheduleItem.objects.get(pk=second_item_id)
+        self.assertEqual(item.start_time.strftime('%H:%M'), '14:00')  # unchanged
+
+    def test_can_move_card_to_its_own_current_time_without_false_overlap(self):
+        resp = self._post_json(reverse('api_add_item', args=[self.plan.pk]), {
+            'day': 1, 'template_id': self.move_tpl.pk, 'start_time': '10:00', 'duration_minutes': 60,
+        })
+        item_id = resp.json()['id']
+        move_resp = self._post_json(
+            reverse('api_update_time', args=[self.plan.pk, item_id]), {'start_time': '10:00'},
+        )
+        self.assertEqual(move_resp.status_code, 200)
+
+
+class EditPermissionTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='editowner', password='pass1234')
+        Profile.objects.create(user=self.owner, home_address='x')
+        self.member = User.objects.create_user(username='editmember', password='pass1234')
+        Profile.objects.create(user=self.member, home_address='x')
+        self.plan = TravelPlan.objects.create(user=self.owner, name='編集権限テスト')
+        self.group = Group.objects.create(name='編集グループ', owner=self.owner)
+        self.group.members.add(self.member)
+        self.plan.group = self.group
+        self.plan.save(update_fields=['group'])
+        # The member needs their own default card templates to add items with.
+        ensure_defaults(self.member)
+        self.member_move_tpl = CardTemplate.objects.get(user=self.member, card_type='move', is_default=True)
+
+    def _add_item_as(self, user):
+        self.client.force_login(user)
+        return self.client.post(
+            reverse('api_add_item', args=[self.plan.pk]),
+            data=json.dumps({'day': 1, 'template_id': self.member_move_tpl.pk, 'start_time': '10:00'}),
+            content_type='application/json',
+        )
+
+    def test_member_without_approval_cannot_edit_cards(self):
+        resp = self._add_item_as(self.member)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_member_can_request_edit_access(self):
+        self.client.force_login(self.member)
+        self.client.post(reverse('plan_request_edit', args=[self.plan.pk]))
+        req = EditRequest.objects.get(plan=self.plan, user=self.member)
+        self.assertEqual(req.status, 'pending')
+
+    def test_owner_cannot_request_edit_on_their_own_plan(self):
+        self.client.force_login(self.owner)
+        resp = self.client.post(reverse('plan_request_edit', args=[self.plan.pk]))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_stranger_cannot_request_edit(self):
+        stranger = User.objects.create_user(username='editstranger', password='pass1234')
+        self.client.force_login(stranger)
+        resp = self.client.post(reverse('plan_request_edit', args=[self.plan.pk]))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_owner_approval_grants_edit_access(self):
+        self.client.force_login(self.member)
+        self.client.post(reverse('plan_request_edit', args=[self.plan.pk]))
+        req = EditRequest.objects.get(plan=self.plan, user=self.member)
+
+        self.client.force_login(self.owner)
+        self.client.post(
+            reverse('plan_respond_edit_request', args=[self.plan.pk, req.pk]), {'status': 'approved'},
+        )
+        req.refresh_from_db()
+        self.assertEqual(req.status, 'approved')
+
+        resp = self._add_item_as(self.member)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_owner_rejection_keeps_member_locked_out(self):
+        self.client.force_login(self.member)
+        self.client.post(reverse('plan_request_edit', args=[self.plan.pk]))
+        req = EditRequest.objects.get(plan=self.plan, user=self.member)
+
+        self.client.force_login(self.owner)
+        self.client.post(
+            reverse('plan_respond_edit_request', args=[self.plan.pk, req.pk]), {'status': 'rejected'},
+        )
+        resp = self._add_item_as(self.member)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_member_can_reapply_after_rejection(self):
+        req = EditRequest.objects.create(plan=self.plan, user=self.member, status='rejected')
+        self.client.force_login(self.member)
+        self.client.post(reverse('plan_request_edit', args=[self.plan.pk]))
+        req.refresh_from_db()
+        self.assertEqual(req.status, 'pending')
+
+    def test_non_owner_cannot_respond_to_edit_requests(self):
+        req = EditRequest.objects.create(plan=self.plan, user=self.member, status='pending')
+        outsider = User.objects.create_user(username='editoutsider', password='pass1234')
+        self.client.force_login(outsider)
+        resp = self.client.post(
+            reverse('plan_respond_edit_request', args=[self.plan.pk, req.pk]), {'status': 'approved'},
+        )
+        self.assertEqual(resp.status_code, 404)
+        req.refresh_from_db()
+        self.assertEqual(req.status, 'pending')
+
+    def test_owner_can_revoke_previously_approved_access(self):
+        req = EditRequest.objects.create(plan=self.plan, user=self.member, status='approved')
+        self.assertTrue(self.plan.can_edit(self.member))
+
+        self.client.force_login(self.owner)
+        self.client.post(reverse('plan_revoke_edit', args=[self.plan.pk, req.pk]))
+        self.assertFalse(EditRequest.objects.filter(pk=req.pk).exists())
+
+        resp = self._add_item_as(self.member)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_revoked_editor_can_request_again(self):
+        EditRequest.objects.create(plan=self.plan, user=self.member, status='approved')
+        self.client.force_login(self.member)
+        self.client.post(reverse('plan_request_edit', args=[self.plan.pk]))
+        # Already approved: re-requesting must not knock it back to pending.
+        req = EditRequest.objects.get(plan=self.plan, user=self.member)
+        self.assertEqual(req.status, 'approved')
+
+    def test_approved_editor_still_cannot_touch_owner_only_settings(self):
+        req = EditRequest.objects.create(plan=self.plan, user=self.member, status='approved')
+        self.assertTrue(self.plan.can_edit(self.member))
+        self.client.force_login(self.member)
+
+        resp = self.client.post(reverse('plan_toggle_warikan', args=[self.plan.pk]))
+        self.assertEqual(resp.status_code, 404)
+        resp = self.client.post(reverse('plan_delete', args=[self.plan.pk]))
+        self.assertEqual(resp.status_code, 404)
+        resp = self.client.post(reverse('plan_set_participants', args=[self.plan.pk]), {'participant_count': '5'})
+        self.assertEqual(resp.status_code, 404)
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.participant_count, 1)
+
+    def test_plan_edit_page_reflects_permission_state(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(reverse('plan_edit', args=[self.plan.pk]))
+        self.assertFalse(resp.context['can_edit_cards'])
+        self.assertContains(resp, '編集を申請する')
+
+        self.client.post(reverse('plan_request_edit', args=[self.plan.pk]))
+        resp2 = self.client.get(reverse('plan_edit', args=[self.plan.pk]))
+        self.assertContains(resp2, '編集を申請中です')
+
+        req = EditRequest.objects.get(plan=self.plan, user=self.member)
+        self.client.force_login(self.owner)
+        self.client.post(
+            reverse('plan_respond_edit_request', args=[self.plan.pk, req.pk]), {'status': 'approved'},
+        )
+
+        self.client.force_login(self.member)
+        resp3 = self.client.get(reverse('plan_edit', args=[self.plan.pk]))
+        self.assertTrue(resp3.context['can_edit_cards'])
+        self.assertContains(resp3, 'palette')
+        self.assertContains(resp3, '編集が許可されています')
+
+    def test_owner_sees_pending_request_in_notifications_and_badge(self):
+        self.client.force_login(self.member)
+        self.client.post(reverse('plan_request_edit', args=[self.plan.pk]))
+
+        self.client.force_login(self.owner)
+        resp = self.client.get(reverse('notifications'))
+        self.assertEqual(len(resp.context['pending_edit_requests']), 1)
+
+        top_resp = self.client.get(reverse('top'))
+        self.assertEqual(top_resp.context['unread_notification_count'], 1)
+
+    def test_requester_sees_decision_notification_that_disappears_once_read(self):
+        self.client.force_login(self.member)
+        self.client.post(reverse('plan_request_edit', args=[self.plan.pk]))
+        req = EditRequest.objects.get(plan=self.plan, user=self.member)
+
+        self.client.force_login(self.owner)
+        self.client.post(
+            reverse('plan_respond_edit_request', args=[self.plan.pk, req.pk]), {'status': 'approved'},
+        )
+
+        self.client.force_login(self.member)
+        resp = self.client.get(reverse('notifications'))
+        kinds = [(n['kind'], n.get('status')) for n in resp.context['notifications']]
+        self.assertIn(('edit_request', 'approved'), kinds)
+
+        self.client.post(reverse('edit_request_read', args=[req.pk]))
+        resp2 = self.client.get(reverse('notifications'))
+        kinds2 = [(n['kind'], n.get('status')) for n in resp2.context['notifications']]
+        self.assertNotIn(('edit_request', 'approved'), kinds2)
+
 
 class ApprovalFlowTests(TestCase):
     def setUp(self):
@@ -644,17 +974,19 @@ class GroupTests(TestCase):
 
     def test_owner_can_add_member(self):
         group = Group.objects.create(name='友人', owner=self.owner)
-        self.client.post(reverse('group_detail', args=[group.pk]), {'username': 'groupmember'})
+        member_code = self.member.profile.ensure_user_code()
+        self.client.post(reverse('group_detail', args=[group.pk]), {'user_code': member_code})
         self.assertTrue(group.is_member(self.member))
 
-    def test_adding_nonexistent_username_shows_error(self):
+    def test_adding_nonexistent_code_shows_error(self):
         group = Group.objects.create(name='友人2', owner=self.owner)
-        resp = self.client.post(reverse('group_detail', args=[group.pk]), {'username': 'ghost'})
-        self.assertContains(resp, 'そのユーザー名は見つかりません')
+        resp = self.client.post(reverse('group_detail', args=[group.pk]), {'user_code': 'ghost-code'})
+        self.assertContains(resp, 'そのIDのユーザーは見つかりません')
 
     def test_adding_owner_as_member_shows_error(self):
         group = Group.objects.create(name='友人3', owner=self.owner)
-        resp = self.client.post(reverse('group_detail', args=[group.pk]), {'username': 'groupowner'})
+        owner_code = self.owner.profile.ensure_user_code()
+        resp = self.client.post(reverse('group_detail', args=[group.pk]), {'user_code': owner_code})
         self.assertContains(resp, 'グループのオーナーはすでにメンバーです')
 
     def test_non_member_cannot_view_group(self):
@@ -714,6 +1046,117 @@ class GroupTests(TestCase):
             data=json.dumps({'text': '侵入'}), content_type='application/json',
         )
         self.assertEqual(resp.status_code, 404)
+
+
+class GroupChatMessageTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(username='chatowner', password='pass1234')
+        Profile.objects.create(user=self.owner, home_address='x')
+        self.member = User.objects.create_user(username='chatmember', password='pass1234')
+        Profile.objects.create(user=self.member, home_address='x')
+        self.group = Group.objects.create(name='チャット編集グループ', owner=self.owner)
+        self.group.members.add(self.member)
+
+    def _post_json(self, url, payload):
+        return self.client.post(url, data=json.dumps(payload), content_type='application/json')
+
+    def test_author_can_edit_own_message(self):
+        msg = GroupMessage.objects.create(group=self.group, user=self.member, text='元のメッセージ')
+        self.client.force_login(self.member)
+        resp = self._post_json(
+            reverse('api_group_message_edit', args=[self.group.pk, msg.pk]), {'text': '編集後のメッセージ'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        msg.refresh_from_db()
+        self.assertEqual(msg.text, '編集後のメッセージ')
+        self.assertIsNotNone(msg.edited_at)
+        self.assertTrue(resp.json()['edited'])
+
+    def test_non_author_cannot_edit_message(self):
+        msg = GroupMessage.objects.create(group=self.group, user=self.owner, text='オーナーのメッセージ')
+        self.client.force_login(self.member)
+        resp = self._post_json(
+            reverse('api_group_message_edit', args=[self.group.pk, msg.pk]), {'text': '書き換え'},
+        )
+        self.assertEqual(resp.status_code, 404)
+        msg.refresh_from_db()
+        self.assertEqual(msg.text, 'オーナーのメッセージ')
+
+    def test_non_member_cannot_edit_message(self):
+        msg = GroupMessage.objects.create(group=self.group, user=self.owner, text='メッセージ')
+        outsider = User.objects.create_user(username='chateditoutsider', password='pass1234')
+        self.client.force_login(outsider)
+        resp = self._post_json(
+            reverse('api_group_message_edit', args=[self.group.pk, msg.pk]), {'text': '書き換え'},
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_editing_with_empty_text_is_rejected(self):
+        msg = GroupMessage.objects.create(group=self.group, user=self.member, text='元のメッセージ')
+        self.client.force_login(self.member)
+        resp = self._post_json(reverse('api_group_message_edit', args=[self.group.pk, msg.pk]), {'text': '   '})
+        self.assertEqual(resp.status_code, 400)
+        msg.refresh_from_db()
+        self.assertEqual(msg.text, '元のメッセージ')
+
+    def test_author_can_delete_own_message(self):
+        msg = GroupMessage.objects.create(group=self.group, user=self.member, text='削除予定')
+        self.client.force_login(self.member)
+        resp = self.client.post(reverse('api_group_message_delete', args=[self.group.pk, msg.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(GroupMessage.objects.filter(pk=msg.pk).exists())
+
+    def test_non_author_cannot_delete_message(self):
+        msg = GroupMessage.objects.create(group=self.group, user=self.owner, text='守られるメッセージ')
+        self.client.force_login(self.member)
+        resp = self.client.post(reverse('api_group_message_delete', args=[self.group.pk, msg.pk]))
+        self.assertEqual(resp.status_code, 404)
+        self.assertTrue(GroupMessage.objects.filter(pk=msg.pk).exists())
+
+    def test_mentioning_a_real_member_is_highlighted_and_recorded(self):
+        self.client.force_login(self.member)
+        resp = self._post_json(
+            reverse('api_group_messages', args=[self.group.pk]), {'text': 'こんにちは @chatowner さん'},
+        )
+        body = resp.json()
+        sent = next(m for m in body['messages'] if m['text'] == 'こんにちは @chatowner さん')
+        self.assertIn('<span class="mention">@chatowner</span>', sent['html_text'])
+        msg = GroupMessage.objects.get(pk=sent['id'])
+        self.assertIn(self.owner, msg.mentions.all())
+
+    def test_mentioning_a_non_member_is_not_highlighted(self):
+        self.client.force_login(self.member)
+        resp = self._post_json(
+            reverse('api_group_messages', args=[self.group.pk]), {'text': '@nobody こんにちは'},
+        )
+        body = resp.json()
+        sent = next(m for m in body['messages'] if m['text'] == '@nobody こんにちは')
+        self.assertNotIn('mention', sent['html_text'])
+        msg = GroupMessage.objects.get(pk=sent['id'])
+        self.assertEqual(msg.mentions.count(), 0)
+
+    def test_editing_message_updates_mentions(self):
+        msg = GroupMessage.objects.create(group=self.group, user=self.member, text='@chatowner こんにちは')
+        msg.mentions.set([self.owner])
+        self.client.force_login(self.member)
+        self._post_json(reverse('api_group_message_edit', args=[self.group.pk, msg.pk]), {'text': 'メンションなし'})
+        msg.refresh_from_db()
+        self.assertEqual(msg.mentions.count(), 0)
+
+    def test_group_detail_page_shows_edit_delete_only_for_own_messages(self):
+        own_msg = GroupMessage.objects.create(group=self.group, user=self.member, text='自分のメッセージ')
+        other_msg = GroupMessage.objects.create(group=self.group, user=self.owner, text='相手のメッセージ')
+        self.client.force_login(self.member)
+        resp = self.client.get(reverse('group_detail', args=[self.group.pk]))
+        content = resp.content.decode()
+        self.assertIn(f'startEditMessage({own_msg.pk})', content)
+        self.assertNotIn(f'startEditMessage({other_msg.pk})', content)
+
+    def test_group_detail_page_renders_mention_highlight(self):
+        GroupMessage.objects.create(group=self.group, user=self.member, text='@chatowner お願いします')
+        self.client.force_login(self.member)
+        resp = self.client.get(reverse('group_detail', args=[self.group.pk]))
+        self.assertContains(resp, '<span class="mention">@chatowner</span>')
 
 
 class LikeAndNotificationTests(TestCase):

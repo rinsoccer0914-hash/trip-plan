@@ -5,8 +5,15 @@
 .chat-log{display:flex;flex-direction:column;gap:10px;max-height:360px;overflow-y:auto;padding:4px}
 .chat-message{background:#fafaf8;border:1px solid #e5e5e0;border-radius:10px;padding:8px 12px;max-width:80%}
 .chat-message.mine{align-self:flex-end;background:#eff6ff;border-color:#bfdbfe}
-.chat-message-meta{font-size:11px;color:#888;margin-bottom:2px;display:flex;gap:8px}
+.chat-message-meta{font-size:11px;color:#888;margin-bottom:2px;display:flex;gap:8px;align-items:center}
 .chat-message-text{font-size:14px;color:#1a1a1a;white-space:pre-wrap;word-break:break-word}
+.chat-message-edited{color:#aaa;font-size:10px}
+.chat-message-actions{display:flex;gap:8px;margin-top:4px}
+.chat-message-actions button{background:none;border:none;color:#888;font-size:11px;cursor:pointer;padding:0}
+.chat-message-actions button:hover{color:#2563eb;text-decoration:underline}
+.chat-edit-row{display:flex;gap:6px;margin-top:4px}
+.chat-edit-row input{flex:1;padding:6px 8px;border:1px solid #d0d0cc;border-radius:6px;font-size:13px}
+.mention{color:#2563eb;font-weight:600}
 </style>
 {% endblock %}
 {% block content %}
@@ -54,8 +61,8 @@
     <form method="post" style="display:flex;gap:10px;align-items:flex-end">
       {% csrf_token %}
       <div class="form-group" style="flex:1;margin-bottom:0">
-        <label>ユーザー名でメンバーを追加</label>
-        <input type="text" name="username" placeholder="ユーザー名" required>
+        <label>IDでメンバーを追加</label>
+        <input type="text" name="user_code" placeholder="例：ab12-cd34" required>
       </div>
       <button type="submit" class="btn btn-primary">追加</button>
     </form>
@@ -82,12 +89,24 @@
     <h2 style="font-size:15px;font-weight:600;margin-bottom:16px">💬 グループチャット</h2>
     <div class="chat-log" id="chat-log">
       {% for msg in chat_messages %}
-      <div class="chat-message {% if msg.user == user %}mine{% endif %}">
+      <div class="chat-message {% if msg.user == user %}mine{% endif %}" data-msg-id="{{ msg.pk }}">
         <div class="chat-message-meta">
           <strong>{{ msg.user.username }}</strong>
           <span>{{ msg.created_at|date:"m/d H:i" }}</span>
+          {% if msg.edited_at %}<span class="chat-message-edited">（編集済み）</span>{% endif %}
         </div>
-        <div class="chat-message-text">{{ msg.text }}</div>
+        <div class="chat-message-text" id="chat-text-{{ msg.pk }}">{{ msg.html_text }}</div>
+        {% if msg.user == user %}
+        <div class="chat-message-actions">
+          <button type="button" onclick="startEditMessage({{ msg.pk }})">編集</button>
+          <button type="button" onclick="deleteMessage({{ group.pk }}, {{ msg.pk }})">削除</button>
+        </div>
+        <div class="chat-edit-row" id="chat-edit-{{ msg.pk }}" style="display:none">
+          <input type="text" id="chat-edit-input-{{ msg.pk }}" value="{{ msg.text }}">
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveEditMessage({{ group.pk }}, {{ msg.pk }})">保存</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="cancelEditMessage({{ msg.pk }})">取消</button>
+        </div>
+        {% endif %}
       </div>
       {% empty %}
       <div style="text-align:center;padding:24px;color:#aaa;font-size:13px">まだメッセージがありません</div>
@@ -95,7 +114,7 @@
     </div>
     <form method="post" action="/groups/{{ group.pk }}/message/" style="display:flex;gap:10px;margin-top:16px">
       {% csrf_token %}
-      <input type="text" name="text" placeholder="メッセージを入力" required autocomplete="off" style="flex:1;padding:9px 12px;border:1px solid #d0d0cc;border-radius:8px;font-size:14px">
+      <input type="text" name="text" placeholder="メッセージを入力（@ユーザー名でメンション）" required autocomplete="off" style="flex:1;padding:9px 12px;border:1px solid #d0d0cc;border-radius:8px;font-size:14px">
       <button type="submit" class="btn btn-primary">送信</button>
     </form>
   </div>
@@ -105,5 +124,44 @@
 <script>
 const chatLog = document.getElementById('chat-log');
 if (chatLog) chatLog.scrollTop = chatLog.scrollHeight;
+const CSRF = '{{ csrf_token }}';
+
+function startEditMessage(id) {
+  document.getElementById('chat-text-' + id).style.display = 'none';
+  document.getElementById('chat-edit-' + id).style.display = 'flex';
+}
+
+function cancelEditMessage(id) {
+  document.getElementById('chat-text-' + id).style.display = '';
+  document.getElementById('chat-edit-' + id).style.display = 'none';
+}
+
+async function saveEditMessage(groupPk, id) {
+  const text = document.getElementById('chat-edit-input-' + id).value.trim();
+  if (!text) return;
+  const res = await fetch('/api/groups/' + groupPk + '/messages/' + id + '/edit/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({text: text})
+  });
+  if (!res.ok) {
+    alert('編集に失敗しました。もう一度お試しください。');
+    return;
+  }
+  location.reload();
+}
+
+async function deleteMessage(groupPk, id) {
+  if (!confirm('このメッセージを削除しますか？')) return;
+  const res = await fetch('/api/groups/' + groupPk + '/messages/' + id + '/delete/', {
+    method: 'POST',
+    headers: {'X-CSRFToken': CSRF}
+  });
+  if (!res.ok) {
+    alert('削除に失敗しました。もう一度お試しください。');
+    return;
+  }
+  location.reload();
+}
 </script>
 {% endblock %}

@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, time, timedelta
 from urllib.parse import urlencode
 from django.shortcuts import render, redirect, get_object_or_404
@@ -11,7 +12,10 @@ from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import never_cache
-from .models import TravelPlan, CardTemplate, ScheduleItem, Group, CardResponse, GroupMessage, PlanLike, Profile
+from django.utils import timezone
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
+from .models import TravelPlan, CardTemplate, ScheduleItem, Group, CardResponse, GroupMessage, PlanLike, Profile, EditRequest
 
 DEFAULT_CARDS = [
     ('起床・就寝', 'wake'),
@@ -249,7 +253,8 @@ def login_view(request):
         if user:
             login(request, user)
             ensure_defaults(user)
-            Profile.objects.get_or_create(user=user)
+            profile, _ = Profile.objects.get_or_create(user=user)
+            profile.ensure_user_code()
             return redirect('top')
         error = 'ユーザー名またはパスワードが正しくありません'
     return render(request, 'travel/login.html', {
@@ -273,7 +278,8 @@ def register_view(request):
             user = User.objects.create_user(username=username, password=password)
             login(request, user)
             ensure_defaults(user)
-            Profile.objects.create(user=user, home_address=home_address)
+            profile = Profile.objects.create(user=user, home_address=home_address)
+            profile.ensure_user_code()
             return redirect('top')
     return render(request, 'travel/register.html', {'error': error})
 
@@ -286,6 +292,7 @@ def logout_view(request):
 @login_required
 def set_home_address_view(request):
     profile, _ = Profile.objects.get_or_create(user=request.user)
+    profile.ensure_user_code()
     if request.method == 'POST':
         profile.home_address = request.POST.get('home_address', '').strip()
         profile.save(update_fields=['home_address'])
@@ -296,8 +303,21 @@ def set_home_address_view(request):
 @login_required
 def my_info_view(request):
     profile, _ = Profile.objects.get_or_create(user=request.user)
+    profile.ensure_user_code()
+    error = None
+    if request.method == 'POST':
+        new_code = request.POST.get('user_code', '').strip()
+        if not new_code:
+            error = 'IDを入力してください'
+        elif len(new_code) > 32:
+            error = 'IDは32文字以内で入力してください'
+        elif Profile.objects.exclude(pk=profile.pk).filter(user_code=new_code).exists():
+            error = 'そのIDはすでに使われています'
+        else:
+            profile.user_code = new_code
+            profile.save(update_fields=['user_code'])
     plans = TravelPlan.objects.filter(user=request.user)
-    return render(request, 'travel/my_info.html', {'profile': profile, 'plans': plans})
+    return render(request, 'travel/my_info.html', {'profile': profile, 'plans': plans, 'error': error})
 
 
 @login_required
@@ -403,9 +423,22 @@ def plan_edit(request, pk):
         focus_item = None
     share_url = request.build_absolute_uri(reverse('plan_share', args=[plan.share_token]))
     my_groups = Group.objects.filter(owner=request.user) if is_owner else Group.objects.none()
-    chat_messages = plan.group.messages.select_related('user') if plan.group_id else None
+    chat_messages = None
+    if plan.group_id:
+        chat_messages = list(plan.group.messages.select_related('user'))
+        member_usernames = _group_member_usernames(plan.group)
+        for m in chat_messages:
+            m.html_text = _render_message_html(m.text, member_usernames)
     plan.my_like = plan.is_liked_by(request.user)
     plan.like_count = plan.likes.count()
+    can_edit_cards = plan.can_edit(request.user)
+    edit_requests = None
+    my_edit_request = None
+    if is_owner:
+        if plan.group_id:
+            edit_requests = plan.edit_requests.select_related('user').order_by('-updated_at')
+    else:
+        my_edit_request = plan.edit_requests.filter(user=request.user).first()
     return render(request, 'travel/plan_edit.html', {
         'plan': plan,
         'templates': templates,
@@ -419,6 +452,9 @@ def plan_edit(request, pk):
         'minute_options': MINUTE_OPTIONS,
         'share_url': share_url,
         'is_owner': is_owner,
+        'can_edit_cards': can_edit_cards,
+        'edit_requests': edit_requests,
+        'my_edit_request': my_edit_request,
         'my_groups': my_groups,
         'chat_messages': chat_messages,
         'subtype_choices_json': json.dumps(SUBTYPE_CHOICES, ensure_ascii=False),
@@ -542,6 +578,55 @@ def plan_toggle_warikan(request, pk):
 
 
 @login_required
+@require_POST
+def plan_request_edit(request, pk):
+    """A group member (never the owner) asks for permission to edit this
+    plan's schedule cards. Re-submitting after a rejection puts it back to
+    pending; re-submitting once already approved is a no-op."""
+    plan = _get_viewable_plan_or_404(pk, request.user)
+    if plan.user_id == request.user.id:
+        raise Http404
+    edit_req, _ = EditRequest.objects.get_or_create(plan=plan, user=request.user)
+    if edit_req.status != 'approved':
+        edit_req.status = 'pending'
+        edit_req.is_read = False
+        edit_req.save(update_fields=['status', 'is_read', 'updated_at'])
+    return redirect('plan_edit', pk=plan.pk)
+
+
+@login_required
+@require_POST
+def plan_respond_edit_request(request, pk, req_pk):
+    plan = get_object_or_404(TravelPlan, pk=pk, user=request.user)
+    edit_req = get_object_or_404(EditRequest, pk=req_pk, plan=plan)
+    status = request.POST.get('status')
+    if status in ('approved', 'rejected'):
+        edit_req.status = status
+        edit_req.is_read = False
+        edit_req.save(update_fields=['status', 'is_read', 'updated_at'])
+    return redirect('plan_edit', pk=plan.pk)
+
+
+@login_required
+@require_POST
+def plan_revoke_edit(request, pk, req_pk):
+    plan = get_object_or_404(TravelPlan, pk=pk, user=request.user)
+    edit_req = get_object_or_404(EditRequest, pk=req_pk, plan=plan, status='approved')
+    edit_req.delete()
+    return redirect('plan_edit', pk=plan.pk)
+
+
+@login_required
+@require_POST
+def edit_request_read(request, pk):
+    edit_req = get_object_or_404(EditRequest, pk=pk, user=request.user)
+    if not edit_req.is_read:
+        edit_req.is_read = True
+        edit_req.save(update_fields=['is_read'])
+    return redirect('plan_edit', pk=edit_req.plan_id)
+
+
+@login_required
 def group_list(request):
     owned_groups = Group.objects.filter(owner=request.user)
     joined_groups = Group.objects.filter(members=request.user).exclude(owner=request.user)
@@ -571,21 +656,61 @@ def group_detail(request, pk):
     if request.method == 'POST':
         if not is_owner:
             raise Http404
-        username = request.POST.get('username', '').strip()
-        new_member = User.objects.filter(username=username).first()
+        user_code = request.POST.get('user_code', '').strip()
+        new_member = User.objects.filter(profile__user_code=user_code).first() if user_code else None
         if not new_member:
-            error = 'そのユーザー名は見つかりません'
+            error = 'そのIDのユーザーは見つかりません'
         elif new_member.id == group.owner_id:
             error = 'グループのオーナーはすでにメンバーです'
         else:
             group.members.add(new_member)
+    chat_messages = list(group.messages.select_related('user'))
+    member_usernames = _group_member_usernames(group)
+    for m in chat_messages:
+        m.html_text = _render_message_html(m.text, member_usernames)
     return render(request, 'travel/group_detail.html', {
         'group': group,
         'is_owner': is_owner,
         'error': error,
         'shared_plans': group.plans.all(),
-        'chat_messages': group.messages.select_related('user'),
+        'chat_messages': chat_messages,
     })
+
+
+def _group_member_usernames(group):
+    return {group.owner.username} | set(group.members.values_list('username', flat=True))
+
+
+def _render_message_html(text, member_usernames):
+    """Escape the message text and wrap any "@username" that matches an
+    actual group member in a highlighted span. Matching (and highlighting)
+    is done against a known member list rather than a generic @word regex,
+    since usernames here may themselves be full email addresses."""
+    escaped = escape(text)
+    if not member_usernames:
+        return mark_safe(escaped)
+    tokens = sorted((escape(u) for u in member_usernames), key=len, reverse=True)
+    pattern = re.compile('@(' + '|'.join(re.escape(t) for t in tokens) + ')')
+    highlighted = pattern.sub(lambda m: f'<span class="mention">@{m.group(1)}</span>', escaped)
+    return mark_safe(highlighted)
+
+
+def _set_message_mentions(message, group, text):
+    member_usernames = _group_member_usernames(group)
+    mentioned = [u for u in member_usernames if f'@{u}' in text]
+    message.mentions.set(User.objects.filter(username__in=mentioned))
+
+
+def _serialize_message(m, request_user):
+    return {
+        'id': m.pk,
+        'username': m.user.username,
+        'text': m.text,
+        'html_text': str(m.html_text),
+        'created_at': m.created_at.strftime('%m/%d %H:%M'),
+        'edited': m.edited_at is not None,
+        'is_mine': m.user_id == request_user.id,
+    }
 
 
 @login_required
@@ -596,8 +721,40 @@ def group_send_message(request, pk):
         raise Http404
     text = request.POST.get('text', '').strip()
     if text:
-        GroupMessage.objects.create(group=group, user=request.user, text=text)
+        message = GroupMessage.objects.create(group=group, user=request.user, text=text)
+        _set_message_mentions(message, group, text)
     return redirect('group_detail', pk=group.pk)
+
+
+@login_required
+@require_POST
+def api_group_message_edit(request, group_pk, msg_pk):
+    group = get_object_or_404(Group, pk=group_pk)
+    if not group.is_member(request.user):
+        raise Http404
+    message = get_object_or_404(GroupMessage, pk=msg_pk, group=group, user=request.user)
+    data = json.loads(request.body)
+    text = data.get('text', '').strip()
+    if not text:
+        return JsonResponse({'error': 'メッセージを入力してください'}, status=400)
+    message.text = text
+    message.edited_at = timezone.now()
+    message.save(update_fields=['text', 'edited_at'])
+    _set_message_mentions(message, group, text)
+    member_usernames = _group_member_usernames(group)
+    message.html_text = _render_message_html(message.text, member_usernames)
+    return JsonResponse(_serialize_message(message, request.user))
+
+
+@login_required
+@require_POST
+def api_group_message_delete(request, group_pk, msg_pk):
+    group = get_object_or_404(Group, pk=group_pk)
+    if not group.is_member(request.user):
+        raise Http404
+    message = get_object_or_404(GroupMessage, pk=msg_pk, group=group, user=request.user)
+    message.delete()
+    return JsonResponse({'ok': True})
 
 
 @login_required
@@ -609,19 +766,14 @@ def api_group_messages(request, group_pk):
         data = json.loads(request.body)
         text = data.get('text', '').strip()
         if text:
-            GroupMessage.objects.create(group=group, user=request.user, text=text)
+            message = GroupMessage.objects.create(group=group, user=request.user, text=text)
+            _set_message_mentions(message, group, text)
     messages = group.messages.select_related('user')
+    member_usernames = _group_member_usernames(group)
+    for m in messages:
+        m.html_text = _render_message_html(m.text, member_usernames)
     return JsonResponse({
-        'messages': [
-            {
-                'id': m.pk,
-                'username': m.user.username,
-                'text': m.text,
-                'created_at': m.created_at.strftime('%m/%d %H:%M'),
-                'is_mine': m.user_id == request.user.id,
-            }
-            for m in messages
-        ]
+        'messages': [_serialize_message(m, request.user) for m in messages],
     })
 
 
@@ -663,6 +815,15 @@ def _pending_approval_items(user):
     )
 
 
+def _pending_edit_requests(user):
+    """Edit requests awaiting this user's decision, across all plans they own."""
+    return (
+        EditRequest.objects.filter(status='pending', plan__user=user)
+        .select_related('plan', 'user')
+        .order_by('-created_at')
+    )
+
+
 @login_required
 @never_cache
 def notifications_view(request):
@@ -679,6 +840,11 @@ def notifications_view(request):
         .exclude(user=request.user)
         .select_related('plan', 'user')
     )
+    edit_decisions = (
+        EditRequest.objects.filter(user=request.user, is_read=False)
+        .exclude(status='pending')
+        .select_related('plan')
+    )
     entries = []
     for r in responses:
         entries.append({
@@ -690,10 +856,16 @@ def notifications_view(request):
             'kind': 'like', 'pk': like.pk, 'is_read': like.is_read, 'timestamp': like.created_at,
             'user': like.user, 'plan': like.plan,
         })
+    for er in edit_decisions:
+        entries.append({
+            'kind': 'edit_request', 'pk': er.pk, 'is_read': er.is_read, 'timestamp': er.updated_at,
+            'plan': er.plan, 'status': er.status,
+        })
     entries.sort(key=lambda e: e['timestamp'], reverse=True)
     return render(request, 'travel/notifications.html', {
         'notifications': entries,
         'pending_approvals': _pending_approval_items(request.user),
+        'pending_edit_requests': _pending_edit_requests(request.user),
     })
 
 
@@ -739,6 +911,27 @@ def card_template_delete(request, pk):
     return redirect('card_templates')
 
 
+def _overlaps_same_type(plan, day, card_type, start_time, duration_minutes, exclude_pk=None):
+    """Whether another card of the same type on the same day would overlap this
+    time range. Different-type cards may sit side by side (see
+    _assign_overlap_columns); same-type cards may not be stacked on each other."""
+    start_min = start_time.hour * 60 + start_time.minute
+    end_min = start_min + duration_minutes
+    qs = plan.schedule_items.filter(day_number=day, card_type=card_type)
+    if exclude_pk is not None:
+        qs = qs.exclude(pk=exclude_pk)
+    for other in qs:
+        other_start = other.start_time or DEFAULT_START_TIME
+        other_start_min = other_start.hour * 60 + other_start.minute
+        other_end_min = other_start_min + other.duration_minutes
+        if start_min < other_end_min and other_start_min < end_min:
+            return True
+    return False
+
+
+OVERLAP_ERROR = '同じ種類のカードの時間が重なっています'
+
+
 @login_required
 @require_POST
 def api_add_item(request, plan_pk):
@@ -747,9 +940,11 @@ def api_add_item(request, plan_pk):
     day = int(data.get('day', 1))
     tpl_id = data.get('template_id')
     tpl = get_object_or_404(CardTemplate, pk=tpl_id, user=request.user)
-    order = plan.schedule_items.filter(day_number=day).count()
     start_time = _snap_time(data.get('start_time')) or DEFAULT_START_TIME
     duration_minutes = _snap_duration(data.get('duration_minutes'))
+    if _overlaps_same_type(plan, day, tpl.card_type, start_time, duration_minutes):
+        return JsonResponse({'error': OVERLAP_ERROR}, status=400)
+    order = plan.schedule_items.filter(day_number=day).count()
     memo = data.get('memo', '')
     alarm_enabled = bool(data.get('alarm_enabled')) and tpl.card_type == 'wake'
     from_location = data.get('from_location', '').strip() if tpl.card_type == 'move' else ''
@@ -779,6 +974,16 @@ def api_update_time(request, plan_pk, item_pk):
     plan = _get_editable_plan_or_404(plan_pk, request.user)
     item = get_object_or_404(ScheduleItem, pk=item_pk, plan=plan)
     data = json.loads(request.body)
+
+    new_start = _snap_time(data['start_time']) if data.get('start_time') else item.start_time
+    new_duration = int(data['duration_minutes']) if data.get('duration_minutes') else item.duration_minutes
+    new_day = int(data['day']) if 'day' in data else item.day_number
+    time_changed = bool(data.get('start_time')) or bool(data.get('duration_minutes')) or new_day != item.day_number
+    if time_changed and _overlaps_same_type(
+        plan, new_day, item.card_type, new_start or DEFAULT_START_TIME, new_duration, exclude_pk=item.pk,
+    ):
+        return JsonResponse({'error': OVERLAP_ERROR}, status=400)
+
     if data.get('start_time'):
         item.start_time = _snap_time(data['start_time'])
     if data.get('duration_minutes'):
